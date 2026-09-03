@@ -1,0 +1,6 @@
+import { BarcodeItem, BarcodeType, MAX_BARCODE_ITEMS, maxTextLength, typeName } from "./barcode_core"
+export const MAX_FOLDER_NAME_LENGTH = 50
+export function validateFolderName(name: string): string | null { const value = name.trim(); if (!value) return "文件夹名称不能为空"; if (value === "." || value === "..") return "文件夹名称不能为 . 或 .."; if (value.length > MAX_FOLDER_NAME_LENGTH) return `文件夹名称不能超过 ${MAX_FOLDER_NAME_LENGTH} 个字符`; if (/[\\/\\:*?"<>|]/.test(value)) return "文件夹名称包含不支持的特殊字符"; return null }
+export function collectNonEmptyTexts(inputRows: string[]): string[] { return inputRows.map((s) => s.trim()).filter((s) => s.length > 0) }
+export function validateTexts(texts: string[], type: BarcodeType): string | null { if (texts.length > MAX_BARCODE_ITEMS) return `一次最多生成 ${MAX_BARCODE_ITEMS} 条条码`; const limit = maxTextLength(type); const tooLong = texts.findIndex((text) => { const value = ["ean13", "ean8", "upca", "itf14"].includes(type) ? text.replace(/\s/g, "") : text; return value.length > limit }); return tooLong >= 0 ? `第 ${tooLong + 1} 条内容过长：${typeName(type)}最多支持 ${limit} 个字符` : null }
+export function isBarcodeItemValid(item: BarcodeItem): boolean { return item.type === "qr" ? item.qrImage != null : item.bits !== null }

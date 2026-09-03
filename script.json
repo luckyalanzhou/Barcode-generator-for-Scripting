@@ -1,0 +1,45 @@
+{
+  "author" : {
+    "email" : "zhiminzhou1@gmail.com",
+    "name" : "luckyalanzhou",
+    "homepage" : null
+  },
+  "localizedNames" : {
+    "ja" : "",
+    "en" : "Barcode Generator",
+    "pt" : "",
+    "de" : "",
+    "ru" : "",
+    "zh" : "条码生成器",
+    "fr" : "",
+    "es" : "",
+    "it" : ""
+  },
+  "name" : "条码生成器",
+  "icon" : "square.2.layers.3d.fill",
+  "runInApp" : false,
+  "contributors" : [
+
+  ],
+  "description" : "批量条码生成器，支持多种条码格式、扫描填充、收藏管理、历史记录、自定义样式和分享。",
+  "color" : "rgba(143, 168, 149,1)",
+  "entry" : "index.tsx",
+  "remoteResource" : null,
+  "localizedDescriptions" : {
+    "ru" : "",
+    "it" : "",
+    "zh" : "批量生成 QR Code、Code 128-B、Code 39、EAN、UPC、ITF-14 和 Codabar 条码，支持扫描填充、收藏、历史记录、文件夹管理、分享和自定义样式。",
+    "en" : "Generate QR Code, Code 128-B, Code 39, EAN, UPC, ITF-14, and Codabar barcodes in batches. Supports scan-to-fill, favorites, history, folders, sharing, and customizable styles.",
+    "fr" : "",
+    "de" : "",
+    "ja" : "",
+    "es" : "",
+    "pt" : ""
+  },
+  "intentInputTypes" : [
+
+  ],
+  "version" : "1.2.0",
+  "permissions" : null,
+  "iconImage" : ""
+}
