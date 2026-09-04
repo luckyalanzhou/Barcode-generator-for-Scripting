@@ -27,7 +27,10 @@ export function loadFavorites(): FavoriteItem[] {
     folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2).join("/") : "",
   }))
 }
-export function saveFavorites(items: FavoriteItem[]) { Storage.set(FAVORITES_KEY, items, { shared: true }) }
+export function saveFavorites(items: FavoriteItem[]) {
+  Storage.set(FAVORITES_KEY, items)
+  Storage.set(FAVORITES_KEY, items, { shared: true })
+}
 export function loadFolders(): string[] {
   const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true })
   const local = Storage.get<string[]>(FOLDERS_KEY)
@@ -39,7 +42,11 @@ export function loadFolders(): string[] {
   }) : []
   return Array.from(new Set([...normalized, ...favoriteFolders])).filter((f) => f.trim().length > 0)
 }
-export function saveFolders(folders: string[]) { Storage.set(FOLDERS_KEY, Array.from(new Set(folders)).filter((f) => f.trim().length > 0), { shared: true }) }
+export function saveFolders(folders: string[]) {
+  const normalized = Array.from(new Set(folders)).filter((f) => f.trim().length > 0)
+  Storage.set(FOLDERS_KEY, normalized)
+  Storage.set(FOLDERS_KEY, normalized, { shared: true })
+}
 export function splitFolder(folder: string): { rootFolder: string; subFolder: string } { const parts = folder.split("/").map((part) => part.trim()).filter(Boolean); return { rootFolder: parts[0] ?? "", subFolder: parts[1] ?? "" } }
 export function joinFolder(rootFolder: string, subFolder: string): string { const root = rootFolder.trim(); const child = subFolder.trim(); if (!root) return ""; return child ? `${root}/${child}` : root }
 export function createInterchangeBackup(favorites: FavoriteItem[], folders: string[]): InterchangeBackup {

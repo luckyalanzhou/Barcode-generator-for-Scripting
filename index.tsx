@@ -133,6 +133,7 @@ function View() {
   const [showHistory, setShowHistory] = useState(false)
   // 是否打开收藏页
   const [showFavorites, setShowFavorites] = useState(false)
+  const [favoritesViewVersion, setFavoritesViewVersion] = useState(0)
   // 用于可靠激活输入：点击输入框时自增，触发输入框 remount+autofocus 唤出键盘
   const [inputFocusTick, setInputFocusTick] = useState(0)
   // 生成中的同步锁：同时拦截快速连点和异步生成期间的重复跳转。
@@ -430,7 +431,11 @@ function View() {
       const nextFolders = Array.from(new Set([...folders, ...importedFolders]))
       setFolders(nextFolders); saveFolders(nextFolders)
       setFavorites(nextFavorites); saveFavorites(nextFavorites)
+      // 先显示结果对话框；关闭旧页面后重新打开，确保 navigationDestination 不再使用缓存数据
       await alert(`导入完成：新增 ${added} 条，替换 ${replaced} 条，跳过 ${skipped} 条`)
+      setShowFavorites(false)
+      setFavoritesViewVersion((version) => version + 1)
+      setTimeout(() => setShowFavorites(true), 120)
     } catch (error) {
       await alert(`导入失败：${error instanceof Error ? error.message : String(error)}`)
     } finally {
@@ -594,6 +599,7 @@ function View() {
               onChanged: setShowFavorites,
               content: (
                 <FavoritesPage
+                  key={`favorites-${favoritesViewVersion}`}
                   favorites={favorites}
                   colorScheme={settings.colorScheme}
                   settings={settings}
