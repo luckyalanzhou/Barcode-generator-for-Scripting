@@ -8,14 +8,37 @@ const OLD_FAVORITES_FILE = "barcode_generator_favorites.json"
 const OLD_FOLDERS_FILE = "barcode_generator_favorite_folders.json"
 export type HistoryItem = { id: string; texts: string[]; type: BarcodeType; time: number }
 export type FavoriteItem = { id: string; name: string; texts: string[]; type: BarcodeType; time: number; folder: string }
-export type InterchangeFavorite = { id?: string; name: string; rootFolder: string; subFolder: string; type: BarcodeType; time: number; texts: string[] }
+export type InterchangeFavorite = { id?: string; name: string; rootFolder: string; subFolder: string; folder?: string; type: BarcodeType; barcodeType?: BarcodeType; time: number; texts: string[] }
 export type InterchangeBackup = { format: "BarcodeGeneratorInterchange"; version: 1; exportedAt: number; folders: { name: string; children: string[] }[]; favorites: InterchangeFavorite[] }
 const BARCODE_TYPES: BarcodeType[] = ["qr", "code128", "code39", "ean13", "ean8", "upca", "itf14", "codabar"]
 export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
 export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
-export function loadFavorites(): FavoriteItem[] { const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true }); const saved = Array.isArray(shared) ? shared : Storage.get<FavoriteItem[]>(FAVORITES_KEY); if (!Array.isArray(saved)) return []; return saved.map((f) => ({ ...f, type: f.type ?? "code128", folder: typeof f.folder === "string" ? f.folder : "" })) }
+export function loadFavorites(): FavoriteItem[] {
+  const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
+  const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)
+  const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
+  if (!Array.isArray(saved)) return []
+  return saved.filter((f: any) => f && typeof f === "object" && typeof f.name === "string" && Array.isArray(f.texts) && f.texts.every((text: any) => typeof text === "string")).map((f) => ({
+    ...f,
+    id: typeof f.id === "string" && f.id.length > 0 ? f.id : `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
+    name: f.name.trim(),
+    type: BARCODE_TYPES.includes(f.type) ? f.type : "code128",
+    time: typeof f.time === "number" && Number.isFinite(f.time) ? f.time : Date.now(),
+    folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2).join("/") : "",
+  }))
+}
 export function saveFavorites(items: FavoriteItem[]) { Storage.set(FAVORITES_KEY, items, { shared: true }) }
-export function loadFolders(): string[] { const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true }); const saved = Array.isArray(shared) ? shared : Storage.get<string[]>(FOLDERS_KEY); const favoriteFolders = loadFavorites().map((f) => f.folder).filter((f) => f.trim().length > 0); return Array.from(new Set([...(Array.isArray(saved) ? saved : []), ...favoriteFolders])).filter((f) => f.trim().length > 0) }
+export function loadFolders(): string[] {
+  const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true })
+  const local = Storage.get<string[]>(FOLDERS_KEY)
+  const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
+  const favoriteFolders = loadFavorites().map((f) => f.folder).filter((f) => f.trim().length > 0)
+  const normalized = Array.isArray(saved) ? saved.filter((f) => typeof f === "string").flatMap((folder) => {
+    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2)
+    return parts.length === 2 ? [parts[0], parts.join("/")] : parts
+  }) : []
+  return Array.from(new Set([...normalized, ...favoriteFolders])).filter((f) => f.trim().length > 0)
+}
 export function saveFolders(folders: string[]) { Storage.set(FOLDERS_KEY, Array.from(new Set(folders)).filter((f) => f.trim().length > 0), { shared: true }) }
 export function splitFolder(folder: string): { rootFolder: string; subFolder: string } { const parts = folder.split("/").map((part) => part.trim()).filter(Boolean); return { rootFolder: parts[0] ?? "", subFolder: parts[1] ?? "" } }
 export function joinFolder(rootFolder: string, subFolder: string): string { const root = rootFolder.trim(); const child = subFolder.trim(); if (!root) return ""; return child ? `${root}/${child}` : root }
@@ -36,7 +59,7 @@ export function createInterchangeBackup(favorites: FavoriteItem[], folders: stri
     })),
     favorites: favorites.map((favorite) => {
       const { rootFolder, subFolder } = splitFolder(favorite.folder)
-      return { id: favorite.id, name: favorite.name, rootFolder, subFolder, type: favorite.type ?? "code128", time: favorite.time, texts: favorite.texts }
+      return { id: favorite.id, name: favorite.name, rootFolder, subFolder, folder: joinFolder(rootFolder, subFolder), type: favorite.type ?? "code128", barcodeType: favorite.type ?? "code128", time: favorite.time, texts: favorite.texts }
     }),
   }
 }
@@ -56,16 +79,22 @@ export function parseInterchangeBackup(value: unknown): InterchangeBackup {
     if (!item || typeof item.name !== "string" || !item.name.trim() || !Array.isArray(item.texts) || item.texts.some((text: any) => typeof text !== "string")) throw new Error("备份中存在无效的收藏")
     const rootFolder = typeof item.rootFolder === "string" ? item.rootFolder.trim() : ""
     const subFolder = typeof item.subFolder === "string" ? item.subFolder.trim() : ""
-    if (rootFolder.includes("/") || subFolder.includes("/")) throw new Error("备份中存在无效的文件夹路径")
-    const type = item.type ?? "code128"
+    const legacyFolder = typeof item.folder === "string" ? item.folder.trim() : ""
+    const folderParts = legacyFolder.split("/").map((part: string) => part.trim()).filter(Boolean)
+    const resolvedRoot = rootFolder || folderParts[0] || ""
+    const resolvedSub = subFolder || folderParts[1] || ""
+    if (resolvedRoot.includes("/") || resolvedSub.includes("/")) throw new Error("备份中存在无效的文件夹路径")
+    const type = item.type ?? item.barcodeType ?? item.format ?? "code128"
     if (!BARCODE_TYPES.includes(type)) throw new Error(`不支持的条码格式：${String(type)}`)
-    return { id: typeof item.id === "string" ? item.id : undefined, name: item.name.trim(), rootFolder, subFolder, type, time: typeof item.time === "number" && Number.isFinite(item.time) ? item.time : Date.now(), texts: item.texts.slice() }
+    return { id: typeof item.id === "string" ? item.id : undefined, name: item.name.trim(), rootFolder: resolvedRoot, subFolder: resolvedSub, folder: joinFolder(resolvedRoot, resolvedSub), type, barcodeType: type, time: typeof item.time === "number" && Number.isFinite(item.time) ? item.time : Date.now(), texts: item.texts.slice() }
   })
   return { format: "BarcodeGeneratorInterchange", version: 1, exportedAt: typeof data.exportedAt === "number" ? data.exportedAt : Date.now(), folders, favorites }
 }
 
 export function interchangeFoldersToPaths(backup: InterchangeBackup): string[] {
-  return Array.from(new Set(backup.folders.flatMap((root) => [root.name, ...root.children.map((child) => joinFolder(root.name, child))])))
+  const paths = backup.folders.flatMap((root) => [root.name, ...root.children.map((child) => joinFolder(root.name, child))])
+  const favoritePaths = backup.favorites.map((favorite) => joinFolder(favorite.rootFolder, favorite.subFolder))
+  return Array.from(new Set([...paths, ...favoritePaths])).filter((path) => path.length > 0)
 }
 export function loadSettings(): StyleSettings { const saved = Storage.get<Partial<StyleSettings>>(SETTINGS_KEY); return { ...DEFAULT_STYLE, ...(saved && typeof saved === "object" ? saved : {}) } }
 export function saveSettings(settings: StyleSettings) { Storage.set(SETTINGS_KEY, settings) }
