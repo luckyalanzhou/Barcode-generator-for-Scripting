@@ -391,31 +391,50 @@ function View() {
     const paths = await DocumentPicker.pickFiles()
     if (!paths || paths.length === 0) return
     try {
-      const parsed = parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(paths[0])))
+      const path = paths[0]
+      if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
+      if (!FileManager.existsSync(path) || !FileManager.isFileSync(path)) throw new Error("备份文件不存在或不是文件")
+      if (FileManager.isFileStoredIniCloud(path) && !FileManager.isiCloudFileDownloaded(path)) {
+        const downloaded = await FileManager.downloadFileFromiCloud(path)
+        if (!downloaded) throw new Error("备份文件尚未下载完成")
+      }
+      const content = FileManager.readAsStringSync(path).replace(/^\uFEFF/, "").trim()
+      if (!content) throw new Error("备份文件为空")
+      const parsed = parseInterchangeBackup(JSON.parse(content))
       const importedFolders = interchangeFoldersToPaths(parsed)
-      const importedFavorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
-        id: favorite.id || makeRowId(), name: favorite.name, texts: favorite.texts,
-        type: favorite.type ?? "code128", time: favorite.time || Date.now(),
-        folder: joinFolder(favorite.rootFolder, favorite.subFolder),
-      }))
+      const usedIds = new Set(favorites.map((favorite) => favorite.id))
+      const importedFavorites: FavoriteItem[] = parsed.favorites.map((favorite) => {
+        let id = favorite.id || makeRowId()
+        while (usedIds.has(id)) id = makeRowId()
+        usedIds.add(id)
+        return {
+          id, name: favorite.name, texts: favorite.texts,
+          type: favorite.type ?? "code128", time: favorite.time ?? Date.now(),
+          folder: joinFolder(favorite.rootFolder, favorite.subFolder),
+        }
+      })
       const nextFavorites = [...favorites]
+      let added = 0, replaced = 0, skipped = 0
       for (const item of importedFavorites) {
         const duplicate = nextFavorites.find((current) => current.name === item.name && (current.folder || "") === item.folder && (current.type ?? "code128") === item.type && current.texts.join("\\u0001") === item.texts.join("\\u0001"))
-        if (duplicate) continue
+        if (duplicate) { skipped++; continue }
         const sameName = nextFavorites.find((current) => current.name === item.name && (current.folder || "") === item.folder && (current.type ?? "code128") === item.type)
         if (sameName) {
           const choice = await Dialog.actionSheet({ title: "发现同名收藏", message: `${item.folder || "未分类"}/${item.name}`, cancelButton: true, actions: [{ label: "保留原收藏" }, { label: "使用导入内容" }, { label: "两个都保留" }] })
-          if (choice === null || choice === 0) continue
-          if (choice === 1) nextFavorites.splice(nextFavorites.indexOf(sameName), 1)
-        }
+          if (choice === null || choice === 0) { skipped++; continue }
+          if (choice === 1) { nextFavorites.splice(nextFavorites.indexOf(sameName), 1); replaced++ }
+          else added++
+        } else added++
         nextFavorites.push(item)
       }
       const nextFolders = Array.from(new Set([...folders, ...importedFolders]))
       setFolders(nextFolders); saveFolders(nextFolders)
       setFavorites(nextFavorites); saveFavorites(nextFavorites)
-      await alert(`导入完成：新增 ${nextFavorites.length - favorites.length} 条收藏`)
+      await alert(`导入完成：新增 ${added} 条，替换 ${replaced} 条，跳过 ${skipped} 条`)
     } catch (error) {
       await alert(`导入失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      if (typeof DocumentPicker.stopAcessingSecurityScopedResources === "function") DocumentPicker.stopAcessingSecurityScopedResources()
     }
   }
   async function renameFavorite(id: string, name: string) {

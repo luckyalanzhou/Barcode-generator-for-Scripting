@@ -54,9 +54,12 @@ export function parseInterchangeBackup(value: unknown): InterchangeBackup {
   })
   const favorites = data.favorites.map((item: any) => {
     if (!item || typeof item.name !== "string" || !item.name.trim() || !Array.isArray(item.texts) || item.texts.some((text: any) => typeof text !== "string")) throw new Error("备份中存在无效的收藏")
+    const rootFolder = typeof item.rootFolder === "string" ? item.rootFolder.trim() : ""
+    const subFolder = typeof item.subFolder === "string" ? item.subFolder.trim() : ""
+    if (rootFolder.includes("/") || subFolder.includes("/")) throw new Error("备份中存在无效的文件夹路径")
     const type = item.type ?? "code128"
     if (!BARCODE_TYPES.includes(type)) throw new Error(`不支持的条码格式：${String(type)}`)
-    return { id: typeof item.id === "string" ? item.id : undefined, name: item.name.trim(), rootFolder: typeof item.rootFolder === "string" ? item.rootFolder.trim() : "", subFolder: typeof item.subFolder === "string" ? item.subFolder.trim() : "", type, time: typeof item.time === "number" && Number.isFinite(item.time) ? item.time : Date.now(), texts: item.texts.slice() }
+    return { id: typeof item.id === "string" ? item.id : undefined, name: item.name.trim(), rootFolder, subFolder, type, time: typeof item.time === "number" && Number.isFinite(item.time) ? item.time : Date.now(), texts: item.texts.slice() }
   })
   return { format: "BarcodeGeneratorInterchange", version: 1, exportedAt: typeof data.exportedAt === "number" ? data.exportedAt : Date.now(), folders, favorites }
 }
