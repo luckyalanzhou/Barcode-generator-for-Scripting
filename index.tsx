@@ -376,15 +376,32 @@ function View() {
   }
 
   async function exportBackup() {
+    let archiveRoot: string | null = null
+    let archivePath: string | null = null
     try {
       const backup = createInterchangeBackup(favorites, folders)
-      const content = JSON.stringify(backup, null, 2)
-      const data = Data.fromRawString(content)
-      if (!data) throw new Error("无法生成备份文件")
-      await DocumentPicker.exportFiles({ files: [{ data, name: "barcode-generator-backup.json" }] })
-      await alert("跨平台备份已导出")
+      const stamp = Date.now().toString(36)
+      archiveRoot = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}`
+      archivePath = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}.zip`
+      FileManager.createDirectorySync(`${archiveRoot}/favorites`, true)
+      FileManager.writeAsStringSync(`${archiveRoot}/barcode-generator-backup.json`, JSON.stringify(backup, null, 2))
+      for (const folder of folders) FileManager.createDirectorySync(`${archiveRoot}/favorites/${folder}`, true)
+      for (const favorite of favorites) {
+        const folder = favorite.folder ? `/${favorite.folder}` : ""
+        const path = `${archiveRoot}/favorites${folder}/${encodeURIComponent(favorite.id)}.json`
+        FileManager.createDirectorySync(path.slice(0, path.lastIndexOf("/")), true)
+        FileManager.writeAsStringSync(path, JSON.stringify(favorite, null, 2))
+      }
+      await FileManager.zip(archiveRoot, archivePath, true)
+      const data = Data.fromFile(archivePath)
+      if (!data) throw new Error("无法生成备份压缩包")
+      await DocumentPicker.exportFiles({ files: [{ data, name: "barcode-generator-backup.zip" }] })
+      await alert(`备份压缩包已导出：${favorites.length} 条收藏`)
     } catch (error) {
       await alert(`导出失败：${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      if (archiveRoot && FileManager.existsSync(archiveRoot)) FileManager.removeSync(archiveRoot)
+      if (archivePath && FileManager.existsSync(archivePath)) FileManager.removeSync(archivePath)
     }
   }
 
@@ -394,12 +411,26 @@ function View() {
     try {
       const path = paths[0]
       if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
-      const fileData = Data.fromFile(path)
-      if (!fileData) throw new Error("无法读取备份文件，请确认文件已下载完成")
-      const content = fileData.toRawString()
-      if (!content || !content.trim()) throw new Error("备份文件为空")
-      const jsonText = content.trim().replace(/^\uFEFF/, "")
-      const parsed = parseInterchangeBackup(JSON.parse(jsonText))
+      let parsed: InterchangeBackup
+      let extractedPath: string | null = null
+      if (path.toLowerCase().endsWith(".zip")) {
+        extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${Date.now().toString(36)}`
+        FileManager.createDirectorySync(extractedPath, true)
+        await FileManager.unzip(path, extractedPath)
+        const entries = FileManager.readDirectorySync(extractedPath, true)
+          .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
+        const manifest = entries.find((entry: string) => entry.endsWith("/barcode-generator-backup.json") || entry.endsWith("barcode-generator-backup.json"))
+        if (!manifest || !FileManager.isFileSync(manifest)) throw new Error("压缩包中没有有效的备份清单")
+        parsed = parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, "")))
+        FileManager.removeSync(extractedPath)
+      } else {
+        const fileData = Data.fromFile(path)
+        if (!fileData) throw new Error("无法读取备份文件，请确认文件已下载完成")
+        const content = fileData.toRawString()
+        if (!content || !content.trim()) throw new Error("备份文件为空")
+        const jsonText = content.trim().replace(/^\uFEFF/, "")
+        parsed = parseInterchangeBackup(JSON.parse(jsonText))
+      }
       const importedFolders = interchangeFoldersToPaths(parsed)
       const importedFavorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
         id: favorite.id || makeRowId(), name: favorite.name, texts: favorite.texts.slice(),

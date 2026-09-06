@@ -4,6 +4,7 @@ export const HISTORY_MAX = 20
 export const FAVORITES_KEY = "favorites"
 export const FOLDERS_KEY = "favorite_folders"
 export const SETTINGS_KEY = "style_settings"
+const FAVORITES_FILES_ROOT = `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`
 const OLD_FAVORITES_FILE = "barcode_generator_favorites.json"
 const OLD_FOLDERS_FILE = "barcode_generator_favorite_folders.json"
 export type HistoryItem = { id: string; texts: string[]; type: BarcodeType; time: number }
@@ -11,25 +12,66 @@ export type FavoriteItem = { id: string; name: string; texts: string[]; type: Ba
 export type InterchangeFavorite = { id?: string; name: string; rootFolder: string; subFolder: string; folder?: string; type: BarcodeType; barcodeType?: BarcodeType; time: number; texts: string[] }
 export type InterchangeBackup = { format: "BarcodeGeneratorInterchange"; version: 1; exportedAt: number; folders: { name: string; children: string[] }[]; favorites: InterchangeFavorite[] }
 const BARCODE_TYPES: BarcodeType[] = ["qr", "code128", "code39", "ean13", "ean8", "upca", "itf14", "codabar"]
-export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
-export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
-export function loadFavorites(): FavoriteItem[] {
-  const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
-  const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)
-  const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
-  if (!Array.isArray(saved)) return []
-  return saved.filter((f: any) => f && typeof f === "object" && typeof f.name === "string" && Array.isArray(f.texts) && f.texts.every((text: any) => typeof text === "string")).map((f) => ({
+function favoriteFilePath(favorite: FavoriteItem): string {
+  const folder = favorite.folder ? `/${favorite.folder}` : ""
+  return `${FAVORITES_FILES_ROOT}${folder}/${encodeURIComponent(favorite.id)}.json`
+}
+function normalizeFavorite(f: any): FavoriteItem | null {
+  if (!f || typeof f !== "object" || typeof f.name !== "string" || !Array.isArray(f.texts) || !f.texts.every((text: any) => typeof text === "string")) return null
+  return {
     ...f,
     id: typeof f.id === "string" && f.id.length > 0 ? f.id : `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
     name: f.name.trim(),
     type: BARCODE_TYPES.includes(f.type) ? f.type : "code128",
     time: typeof f.time === "number" && Number.isFinite(f.time) ? f.time : Date.now(),
     folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2).join("/") : "",
-  }))
+  }
+}
+function loadFavoritesFromFiles(): FavoriteItem[] {
+  if (!FileManager.existsSync(FAVORITES_FILES_ROOT)) return []
+  const entries = FileManager.readDirectorySync(FAVORITES_FILES_ROOT, true)
+  return entries.map((entry: string) => entry.startsWith("/") ? entry : `${FAVORITES_FILES_ROOT}/${entry}`)
+    .filter((path: string) => path.endsWith(".json") && FileManager.isFileSync(path))
+    .map((path: string) => { try { return normalizeFavorite(JSON.parse(FileManager.readAsStringSync(path))) } catch { return null } })
+    .filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
+}
+function saveFavoritesToFiles(items: FavoriteItem[]) {
+  FileManager.createDirectorySync(FAVORITES_FILES_ROOT, true)
+  const expected = new Set<string>()
+  for (const favorite of items) {
+    const path = favoriteFilePath(favorite)
+    expected.add(path)
+    FileManager.createDirectorySync(path.slice(0, path.lastIndexOf("/")), true)
+    FileManager.writeAsStringSync(path, JSON.stringify(favorite, null, 2))
+  }
+  const existing = FileManager.readDirectorySync(FAVORITES_FILES_ROOT, true)
+    .map((entry: string) => entry.startsWith("/") ? entry : `${FAVORITES_FILES_ROOT}/${entry}`)
+    .filter((path: string) => path.endsWith(".json") && FileManager.isFileSync(path))
+  for (const path of existing) if (!expected.has(path)) FileManager.removeSync(path)
+}
+export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
+export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
+export function loadFavorites(): FavoriteItem[] {
+  const fileFavorites = loadFavoritesFromFiles()
+  if (fileFavorites.length > 0) return fileFavorites
+  const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
+  const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)
+  const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
+  if (!Array.isArray(saved)) return []
+  const normalized = saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
+  if (normalized.length > 0) { try { saveFavoritesToFiles(normalized) } catch { /* keep legacy Storage fallback */ } }
+  return normalized
 }
 export function saveFavorites(items: FavoriteItem[]) {
-  Storage.set(FAVORITES_KEY, items)
-  Storage.set(FAVORITES_KEY, items, { shared: true })
+  try {
+    saveFavoritesToFiles(items)
+    Storage.remove(FAVORITES_KEY)
+    Storage.remove(FAVORITES_KEY, { shared: true })
+  } catch {
+    // Keep the old key-value fallback if file storage is unavailable.
+    Storage.set(FAVORITES_KEY, items)
+    Storage.set(FAVORITES_KEY, items, { shared: true })
+  }
 }
 export function loadFolders(): string[] {
   const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true })
@@ -73,11 +115,29 @@ export function createInterchangeBackup(favorites: FavoriteItem[], folders: stri
 
 export function parseInterchangeBackup(value: unknown): InterchangeBackup {
   if (!value || typeof value !== "object") throw new Error("备份文件不是有效的 JSON 对象")
-  const data = value as any
-  if (data.format !== "BarcodeGeneratorInterchange") throw new Error("不是 BarcodeGeneratorInterchange 备份文件")
-  if (data.version !== 1) throw new Error(`不支持的备份版本：${String(data.version)}`)
+  const envelope = value as any
+  if (envelope.format !== "BarcodeGeneratorInterchange") throw new Error("不是 BarcodeGeneratorInterchange 备份文件")
+  if (envelope.version !== 1) throw new Error(`不支持的备份版本：${String(envelope.version)}`)
+  // Android exports v1 backups with the actual data serialized in `payload`.
+  // Older scripting backups store folders/favorites directly in the root.
+  let data = envelope
+  if (typeof envelope.payload === "string") {
+    try {
+      data = JSON.parse(envelope.payload)
+    } catch {
+      throw new Error("备份中的 payload 不是有效的 JSON")
+    }
+    if (!data || typeof data !== "object") throw new Error("备份中的 payload 无效")
+  }
   if (!Array.isArray(data.folders) || !Array.isArray(data.favorites)) throw new Error("备份缺少 folders 或 favorites")
   const folders = data.folders.map((root: any) => {
+    // Android v1 uses a flat string array; the scripting format uses
+    // { name, children } objects. Normalize both forms for the UI.
+    if (typeof root === "string") {
+      const pathParts = root.split("/").map((part: string) => part.trim()).filter(Boolean)
+      if (pathParts.length === 0 || pathParts.length > 2) throw new Error("备份中存在无效的文件夹路径")
+      return { name: pathParts[0], children: pathParts.length === 2 ? [pathParts[1]] : [] }
+    }
     if (!root || typeof root.name !== "string" || !root.name.trim() || !Array.isArray(root.children)) throw new Error("备份中存在无效的文件夹结构")
     const children = root.children.map((child: any) => { if (typeof child !== "string" || child.includes("/")) throw new Error("备份中存在无效的二级文件夹"); return child.trim() }).filter(Boolean)
     return { name: root.name.trim(), children: Array.from(new Set(children)) }
