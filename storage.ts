@@ -4,7 +4,12 @@ export const HISTORY_MAX = 20
 export const FAVORITES_KEY = "favorites"
 export const FOLDERS_KEY = "favorite_folders"
 export const SETTINGS_KEY = "style_settings"
-const FAVORITES_FILES_ROOT = `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`
+// Keep the live data beside the script. This location is writable in all
+// Scripting versions; the Documents directory is reserved for user exports.
+const FAVORITES_FILES_ROOT = `${FileManager.scriptsDirectory}/BarcodeGeneratorFavorites`
+const LEGACY_FAVORITES_FILES_ROOT = typeof FileManager.documentsDirectory === "string"
+  ? `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`
+  : ""
 const OLD_FAVORITES_FILE = "barcode_generator_favorites.json"
 const OLD_FOLDERS_FILE = "barcode_generator_favorite_folders.json"
 export type HistoryItem = { id: string; texts: string[]; type: BarcodeType; time: number }
@@ -27,10 +32,10 @@ function normalizeFavorite(f: any): FavoriteItem | null {
     folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2).join("/") : "",
   }
 }
-function loadFavoritesFromFiles(): FavoriteItem[] {
-  if (!FileManager.existsSync(FAVORITES_FILES_ROOT)) return []
-  const entries = FileManager.readDirectorySync(FAVORITES_FILES_ROOT, true)
-  return entries.map((entry: string) => entry.startsWith("/") ? entry : `${FAVORITES_FILES_ROOT}/${entry}`)
+function loadFavoritesFromFiles(root: string): FavoriteItem[] {
+  if (!FileManager.existsSync(root)) return []
+  const entries = FileManager.readDirectorySync(root, true)
+  return entries.map((entry: string) => entry.startsWith("/") ? entry : `${root}/${entry}`)
     .filter((path: string) => path.endsWith(".json") && FileManager.isFileSync(path))
     .map((path: string) => { try { return normalizeFavorite(JSON.parse(FileManager.readAsStringSync(path))) } catch { return null } })
     .filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
@@ -52,7 +57,7 @@ function saveFavoritesToFiles(items: FavoriteItem[]) {
 export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
 export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
 export function loadFavorites(): FavoriteItem[] {
-  const fileFavorites = loadFavoritesFromFiles()
+  const fileFavorites = [...loadFavoritesFromFiles(FAVORITES_FILES_ROOT), ...(LEGACY_FAVORITES_FILES_ROOT ? loadFavoritesFromFiles(LEGACY_FAVORITES_FILES_ROOT) : [])]
   if (fileFavorites.length > 0) return fileFavorites
   const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
   const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)

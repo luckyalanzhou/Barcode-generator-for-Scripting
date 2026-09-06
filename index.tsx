@@ -632,8 +632,8 @@ function View() {
                    onRenameFavorite={renameFavorite}
                   onMoveFavorite={moveFavorite}
                   onEdit={editFavorite}
-                   onExportBackup={exportBackup}
-                   onImportBackup={importBackup}
+                   onExportBackup={() => { void exportBackup() }}
+                   onImportBackup={() => { void importBackup() }}
                 />
               ),
             })
