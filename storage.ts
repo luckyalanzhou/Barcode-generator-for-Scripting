@@ -4,10 +4,13 @@ export const HISTORY_MAX = 20
 export const FAVORITES_KEY = "favorites"
 export const FOLDERS_KEY = "favorite_folders"
 export const SETTINGS_KEY = "style_settings"
-// Keep user data outside the script directory. Building/reinstalling a script
-// can replace its script directory, so data stored there is not persistent.
-const FAVORITES_FILES_ROOT = `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`
-const LEGACY_FAVORITES_FILES_ROOT = `${FileManager.scriptsDirectory}/BarcodeGeneratorFavorites`
+// Keep live data in Scripting's App Group directory. It is independent from
+// the script package, so Build Script cannot replace or reorder user files.
+const FAVORITES_FILES_ROOT = `${FileManager.appGroupDocumentsDirectory}/BarcodeGenerator/BarcodeGeneratorFavorites`
+const LEGACY_FAVORITES_ROOTS = [
+  `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`,
+  `${FileManager.scriptsDirectory}/BarcodeGeneratorFavorites`,
+]
 const OLD_FAVORITES_FILE = "barcode_generator_favorites.json"
 const OLD_FOLDERS_FILE = "barcode_generator_favorite_folders.json"
 export type HistoryItem = { id: string; texts: string[]; type: BarcodeType; time: number }
@@ -56,27 +59,22 @@ export function loadHistory(): HistoryItem[] { const saved = Storage.get<History
 export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
 export function loadFavorites(): FavoriteItem[] {
   const currentFavorites = loadFavoritesFromFiles(FAVORITES_FILES_ROOT)
-  const legacyFavorites = loadFavoritesFromFiles(LEGACY_FAVORITES_FILES_ROOT)
-  if (legacyFavorites.length > 0) {
-    const currentIds = new Set(currentFavorites.map((favorite) => favorite.id))
-    const migrated = [...currentFavorites, ...legacyFavorites.filter((favorite) => !currentIds.has(favorite.id))]
-    try {
-      saveFavoritesToFiles(migrated)
-      // The old location is inside the script directory. Remove it only after
-      // the new copy has been written successfully, so Build Script cannot
-      // keep processing stale favorite files.
-      if (FileManager.existsSync(LEGACY_FAVORITES_FILES_ROOT)) FileManager.removeSync(LEGACY_FAVORITES_FILES_ROOT)
-    } catch { /* continue using the readable legacy files */ }
-    return migrated
-  }
-  if (currentFavorites.length > 0) return currentFavorites
+  const legacyFavorites = LEGACY_FAVORITES_ROOTS.flatMap(loadFavoritesFromFiles)
   const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
   const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)
   const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
-  if (!Array.isArray(saved)) return []
-  const normalized = saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
-  if (normalized.length > 0) { try { saveFavoritesToFiles(normalized) } catch { /* keep legacy Storage fallback */ } }
-  return normalized
+  const storedFavorites = Array.isArray(saved)
+    ? saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
+    : []
+  const byId = new Map<string, FavoriteItem>()
+  for (const favorite of [...currentFavorites, ...legacyFavorites, ...storedFavorites]) {
+    if (!byId.has(favorite.id)) byId.set(favorite.id, favorite)
+  }
+  const allFavorites = Array.from(byId.values())
+  if (allFavorites.length > 0 && (legacyFavorites.length > 0 || storedFavorites.length > 0)) {
+    try { saveFavoritesToFiles(allFavorites) } catch { /* keep readable fallback sources */ }
+  }
+  return allFavorites
 }
 export function saveFavorites(items: FavoriteItem[]) {
   try {
