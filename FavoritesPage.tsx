@@ -33,6 +33,7 @@ function BackupAction({
   return (
     <Button
       action={onPress}
+      buttonStyle="plain"
       modifiers={modifiers()
         .frame({ maxWidth: 'infinity', minHeight: 72 })
         .padding({ leading: 12, trailing: 12, top: 10, bottom: 10 })
