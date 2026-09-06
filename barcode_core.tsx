@@ -187,6 +187,9 @@ function code39CharModules(pattern: string): number[] {
 export function encodeCode39(text: string): number[] | null {
   if (text.trim().length === 0) return null
   const upper = text.toUpperCase()
+  // `*` is reserved for the Code 39 start/stop sentinel and must not appear
+  // in the user payload, otherwise scanners may terminate at the wrong point.
+  if (upper.includes("*")) return null
   for (const c of upper) {
     if (!CODE39_PATTERNS[c]) return null
   }
