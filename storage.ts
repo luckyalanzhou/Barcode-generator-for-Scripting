@@ -58,11 +58,17 @@ function saveFavoritesToFiles(items: FavoriteItem[]) {
 export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
 export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
 export function loadFavorites(): FavoriteItem[] {
-  const currentFavorites = loadFavoritesFromFiles(FAVORITES_FILES_ROOT)
-  const legacyFavorites = LEGACY_FAVORITES_ROOTS.flatMap(loadFavoritesFromFiles)
+  // Storage is the authoritative live store. File-based data is only a
+  // migration fallback; reading it on every launch can resurrect stale files
+  // after Build Script has copied or reordered the script package.
   const shared = Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })
   const local = Storage.get<FavoriteItem[]>(FAVORITES_KEY)
-  const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
+  const saved = Array.isArray(shared) ? shared : (Array.isArray(local) ? local : null)
+  if (Array.isArray(saved)) {
+    return saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
+  }
+  const currentFavorites = loadFavoritesFromFiles(FAVORITES_FILES_ROOT)
+  const legacyFavorites = LEGACY_FAVORITES_ROOTS.flatMap(loadFavoritesFromFiles)
   const storedFavorites = Array.isArray(saved)
     ? saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
     : []
@@ -72,20 +78,16 @@ export function loadFavorites(): FavoriteItem[] {
   }
   const allFavorites = Array.from(byId.values())
   if (allFavorites.length > 0 && (legacyFavorites.length > 0 || storedFavorites.length > 0)) {
-    try { saveFavoritesToFiles(allFavorites) } catch { /* keep readable fallback sources */ }
+    Storage.set(FAVORITES_KEY, allFavorites)
+    Storage.set(FAVORITES_KEY, allFavorites, { shared: true })
   }
   return allFavorites
 }
 export function saveFavorites(items: FavoriteItem[]) {
-  try {
-    saveFavoritesToFiles(items)
-    Storage.remove(FAVORITES_KEY)
-    Storage.remove(FAVORITES_KEY, { shared: true })
-  } catch {
-    // Keep the old key-value fallback if file storage is unavailable.
-    Storage.set(FAVORITES_KEY, items)
-    Storage.set(FAVORITES_KEY, items, { shared: true })
-  }
+  // Keep the live collection in Scripting Storage so rebuilding the script
+  // cannot alter the collection. Files are produced only for ZIP backups.
+  Storage.set(FAVORITES_KEY, items)
+  Storage.set(FAVORITES_KEY, items, { shared: true })
 }
 export function loadFolders(): string[] {
   const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true })
