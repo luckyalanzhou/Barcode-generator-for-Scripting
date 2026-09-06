@@ -395,10 +395,11 @@ function View() {
       await FileManager.zip(archiveRoot, archivePath, true)
       const data = Data.fromFile(archivePath)
       if (!data) throw new Error("无法生成备份压缩包")
-      await DocumentPicker.exportFiles({ files: [{ data, name: "barcode-generator-backup.zip" }] })
-      await alert(`备份压缩包已导出：${favorites.length} 条收藏`)
+      const exported = await DocumentPicker.exportFiles({ files: [{ data, name: "barcode-generator-backup.zip" }] })
+      if (!exported || exported.length === 0) return
+      await Dialog.alert({ title: "导出完成", message: `备份压缩包已导出：${favorites.length} 条收藏` })
     } catch (error) {
-      await alert(`导出失败：${error instanceof Error ? error.message : String(error)}`)
+      await Dialog.alert({ title: "导出失败", message: error instanceof Error ? error.message : String(error) })
     } finally {
       if (archiveRoot && FileManager.existsSync(archiveRoot)) FileManager.removeSync(archiveRoot)
       if (archivePath && FileManager.existsSync(archivePath)) FileManager.removeSync(archivePath)
@@ -453,7 +454,7 @@ function View() {
       setFavoritesViewVersion((version) => version + 1)
       await alert(`备份导入完成：${rootCount} 个一级文件夹、${childCount} 个二级文件夹、${savedFavorites.length} 条收藏`)
     } catch (error) {
-      await alert(`备份导入失败：${error instanceof Error ? error.message : String(error)}`)
+      await Dialog.alert({ title: "备份导入失败", message: error instanceof Error ? error.message : String(error) })
     } finally {
       if (typeof DocumentPicker.stopAcessingSecurityScopedResources === "function") DocumentPicker.stopAcessingSecurityScopedResources()
     }
