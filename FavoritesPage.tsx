@@ -349,10 +349,7 @@ export function FavoritesPage({
     >
       <VStack alignment="center" spacing={8} padding={16}>
          <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-           <Button title="导出备份" action={() => {
-             void Dialog.alert({ title: "导出备份", message: "正在准备备份文件…" })
-             onExportBackup()
-           }} />
+           <Button title="导出备份" action={() => { onExportBackup() }} />
            <Button title="导入备份" action={() => { onImportBackup() }} />
          </HStack>
         {favorites.length === 0 ? (
