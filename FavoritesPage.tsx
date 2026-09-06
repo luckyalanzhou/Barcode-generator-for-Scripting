@@ -349,8 +349,8 @@ export function FavoritesPage({
     >
       <VStack alignment="center" spacing={8} padding={16}>
          <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-           <Button title="导出备份" action={onExportBackup} />
-           <Button title="导入备份" action={onImportBackup} />
+           <Button title="导出备份" action={() => { onExportBackup() }} />
+           <Button title="导入备份" action={() => { onImportBackup() }} />
          </HStack>
         {favorites.length === 0 ? (
           <Text
