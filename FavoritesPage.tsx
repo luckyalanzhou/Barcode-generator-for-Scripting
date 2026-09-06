@@ -1,4 +1,4 @@
-import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, modifiers, useState } from "scripting"
+import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, RoundedRectangle, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
 import { FavoriteItem } from "./storage"
 declare const Dialog: any
@@ -14,6 +14,55 @@ function formatFavoriteTime(time: number | undefined): string {
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate() ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`
 }
+
+function BackupAction({
+  icon,
+  title,
+  subtitle,
+  tint,
+  colorScheme,
+  onPress,
+}: {
+  icon: string
+  title: string
+  subtitle: string
+  tint: string
+  colorScheme: CS
+  onPress: () => void
+}) {
+  return (
+    <Button
+      action={onPress}
+      modifiers={modifiers()
+        .frame({ maxWidth: 'infinity', minHeight: 72 })
+        .padding({ leading: 12, trailing: 12, top: 10, bottom: 10 })
+        .background({ style: cardB(colorScheme), shape: { type: "rect", cornerRadius: 18 } })
+        .overlay({
+          alignment: "center",
+          content: <RoundedRectangle cornerRadius={18} stroke={{ shapeStyle: `${tint}55`, strokeStyle: { lineWidth: 1 } }} />,
+        })}
+    >
+      <HStack alignment="center" spacing={10}>
+        <Image
+          systemName={icon}
+          renderingMode="template"
+          modifiers={modifiers()
+            .frame({ width: 34, height: 34, alignment: "center" })
+            .font(17)
+            .foregroundStyle(tint)
+            .background({ style: `${tint}18`, shape: { type: "rect", cornerRadius: 10 } })}
+        />
+        <VStack alignment="leading" spacing={3}>
+          <Text font={15} fontWeight="semibold" modifiers={modifiers().foregroundStyle(lab(colorScheme))}>{title}</Text>
+          <Text font={11} modifiers={modifiers().foregroundStyle(sub(colorScheme))}>{subtitle}</Text>
+        </VStack>
+        <Spacer />
+        <Image systemName="chevron.right" renderingMode="template" modifiers={modifiers().font(12).foregroundStyle(ter(colorScheme))} />
+      </HStack>
+    </Button>
+  )
+}
+
 // 收藏页：底部「收藏」Tab 打开，展示收藏列表（搜索 + 文件夹分组）；点击名称进入条码页，右侧垃圾桶删除
 export function FavoritesPage({
   favorites,
@@ -350,10 +399,20 @@ export function FavoritesPage({
         .navigationBarTitleDisplayMode("inline")}
     >
       <VStack alignment="center" spacing={8} padding={16}>
-         <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-           <Button title="导出备份" action={() => { onExportBackup() }} />
-           <Button title="导入备份" action={() => { onImportBackup() }} />
-         </HStack>
+        <VStack alignment="leading" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
+          <HStack alignment="center" spacing={8}>
+            <VStack alignment="leading" spacing={2}>
+              <Text font={17} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme))}>备份与恢复</Text>
+              <Text font={11} modifiers={modifiers().foregroundStyle(sub(colorScheme))}>按文件夹保存收藏，支持 ZIP 备份</Text>
+            </VStack>
+            <Spacer />
+            <Text font={12} modifiers={modifiers().foregroundStyle(ter(colorScheme))}>{favorites.length} 条</Text>
+          </HStack>
+          <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
+            <BackupAction icon="square.and.arrow.up" title="导出备份" subtitle="保存为 ZIP 压缩包" tint="#3b82f6" colorScheme={colorScheme} onPress={onExportBackup} />
+            <BackupAction icon="square.and.arrow.down" title="导入备份" subtitle="恢复收藏与文件夹" tint="#8b5cf6" colorScheme={colorScheme} onPress={onImportBackup} />
+          </HStack>
+        </VStack>
         {favorites.length === 0 ? (
           <Text
             font={16}
