@@ -31,13 +31,13 @@ function BackupAction({
   onPress: () => void
 }) {
   return (
-    <Button
-      action={onPress}
-      buttonStyle="plain"
+    <VStack
       modifiers={modifiers()
         .frame({ maxWidth: 'infinity', minHeight: 72 })
         .padding({ leading: 12, trailing: 12, top: 10, bottom: 10 })
         .background({ style: cardB(colorScheme), shape: { type: "rect", cornerRadius: 18 } })
+        .contentShape({ type: "rect", cornerRadius: 18 })
+        .onTapGesture(onPress)
         .overlay({
           alignment: "center",
           content: <RoundedRectangle cornerRadius={18} stroke={{ shapeStyle: `${tint}55`, strokeStyle: { lineWidth: 1 } }} />,
@@ -60,7 +60,7 @@ function BackupAction({
         <Spacer />
         <Image systemName="chevron.right" renderingMode="template" modifiers={modifiers().font(12).foregroundStyle(ter(colorScheme))} />
       </HStack>
-    </Button>
+    </VStack>
   )
 }
 
