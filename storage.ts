@@ -60,7 +60,13 @@ export function loadFavorites(): FavoriteItem[] {
   if (legacyFavorites.length > 0) {
     const currentIds = new Set(currentFavorites.map((favorite) => favorite.id))
     const migrated = [...currentFavorites, ...legacyFavorites.filter((favorite) => !currentIds.has(favorite.id))]
-    try { saveFavoritesToFiles(migrated) } catch { /* continue using the readable legacy files */ }
+    try {
+      saveFavoritesToFiles(migrated)
+      // The old location is inside the script directory. Remove it only after
+      // the new copy has been written successfully, so Build Script cannot
+      // keep processing stale favorite files.
+      if (FileManager.existsSync(LEGACY_FAVORITES_FILES_ROOT)) FileManager.removeSync(LEGACY_FAVORITES_FILES_ROOT)
+    } catch { /* continue using the readable legacy files */ }
     return migrated
   }
   if (currentFavorites.length > 0) return currentFavorites
