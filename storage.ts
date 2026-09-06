@@ -4,9 +4,14 @@ export const HISTORY_MAX = 20
 export const FAVORITES_KEY = "favorites"
 export const FOLDERS_KEY = "favorite_folders"
 export const SETTINGS_KEY = "style_settings"
-// Keep live data in Scripting's App Group directory. It is independent from
-// the script package, so Build Script cannot replace or reorder user files.
-const FAVORITES_FILES_ROOT = `${FileManager.appGroupDocumentsDirectory}/BarcodeGenerator/BarcodeGeneratorFavorites`
+// Keep live data outside the script package. iCloud Documents survives script
+// builds and is visible in the Files app; App Group is the offline fallback.
+const EXTERNAL_DATA_ROOT = FileManager.isiCloudEnabled
+  ? `${FileManager.iCloudDocumentsDirectory}/BarcodeGenerator`
+  : `${FileManager.appGroupDocumentsDirectory}/BarcodeGenerator`
+const FAVORITES_FILES_ROOT = `${EXTERNAL_DATA_ROOT}/favorites`
+const FAVORITES_INDEX_FILE = `${FAVORITES_FILES_ROOT}/index.json`
+const FOLDERS_FILE = `${EXTERNAL_DATA_ROOT}/folders.json`
 const LEGACY_FAVORITES_ROOTS = [
   `${FileManager.documentsDirectory}/BarcodeGeneratorFavorites`,
   `${FileManager.scriptsDirectory}/BarcodeGeneratorFavorites`,
@@ -37,7 +42,7 @@ function loadFavoritesFromFiles(root: string): FavoriteItem[] {
   if (!FileManager.existsSync(root)) return []
   const entries = FileManager.readDirectorySync(root, true)
   return entries.map((entry: string) => entry.startsWith("/") ? entry : `${root}/${entry}`)
-    .filter((path: string) => path.endsWith(".json") && FileManager.isFileSync(path))
+    .filter((path: string) => path.endsWith(".json") && !path.endsWith("/index.json") && FileManager.isFileSync(path))
     .map((path: string) => { try { return normalizeFavorite(JSON.parse(FileManager.readAsStringSync(path))) } catch { return null } })
     .filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
 }
@@ -54,6 +59,7 @@ function saveFavoritesToFiles(items: FavoriteItem[]) {
     .map((entry: string) => entry.startsWith("/") ? entry : `${FAVORITES_FILES_ROOT}/${entry}`)
     .filter((path: string) => path.endsWith(".json") && FileManager.isFileSync(path))
   for (const path of existing) if (!expected.has(path)) FileManager.removeSync(path)
+  FileManager.writeAsStringSync(FAVORITES_INDEX_FILE, JSON.stringify({ version: 1, ids: items.map((favorite) => favorite.id) }))
 }
 export function loadHistory(): HistoryItem[] { const saved = Storage.get<HistoryItem[]>(HISTORY_KEY); return Array.isArray(saved) ? saved.map((h) => ({ ...h, type: h.type ?? "code128" })) : [] }
 export function saveHistory(items: HistoryItem[]) { Storage.set(HISTORY_KEY, items) }
@@ -67,7 +73,9 @@ export function loadFavorites(): FavoriteItem[] {
   if (Array.isArray(saved)) {
     return saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
   }
+  const hasExternalIndex = FileManager.existsSync(FAVORITES_INDEX_FILE)
   const currentFavorites = loadFavoritesFromFiles(FAVORITES_FILES_ROOT)
+  if (hasExternalIndex) return currentFavorites
   const legacyFavorites = LEGACY_FAVORITES_ROOTS.flatMap(loadFavoritesFromFiles)
   const storedFavorites = Array.isArray(saved)
     ? saved.map(normalizeFavorite).filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
@@ -84,12 +92,19 @@ export function loadFavorites(): FavoriteItem[] {
   return allFavorites
 }
 export function saveFavorites(items: FavoriteItem[]) {
-  // Keep the live collection in Scripting Storage so rebuilding the script
-  // cannot alter the collection. Files are produced only for ZIP backups.
+  // Keep one JSON file per favorite outside the script package. Storage is a
+  // mirror so older script versions can still read the data.
+  try { saveFavoritesToFiles(items) } catch { /* Storage remains the fallback */ }
   Storage.set(FAVORITES_KEY, items)
   Storage.set(FAVORITES_KEY, items, { shared: true })
 }
 export function loadFolders(): string[] {
+  if (FileManager.existsSync(FOLDERS_FILE)) {
+    try {
+      const external = JSON.parse(FileManager.readAsStringSync(FOLDERS_FILE))
+      if (Array.isArray(external)) return external.filter((folder): folder is string => typeof folder === "string")
+    } catch { /* fall back to Storage and favorite metadata */ }
+  }
   const shared = Storage.get<string[]>(FOLDERS_KEY, { shared: true })
   const local = Storage.get<string[]>(FOLDERS_KEY)
   const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
@@ -102,6 +117,10 @@ export function loadFolders(): string[] {
 }
 export function saveFolders(folders: string[]) {
   const normalized = Array.from(new Set(folders)).filter((f) => f.trim().length > 0)
+  try {
+    FileManager.createDirectorySync(EXTERNAL_DATA_ROOT, true)
+    FileManager.writeAsStringSync(FOLDERS_FILE, JSON.stringify(normalized, null, 2))
+  } catch { /* Storage remains the fallback */ }
   Storage.set(FOLDERS_KEY, normalized)
   Storage.set(FOLDERS_KEY, normalized, { shared: true })
 }
