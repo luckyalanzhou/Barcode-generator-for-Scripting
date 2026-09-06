@@ -52,10 +52,10 @@ import { HistoryPage } from "./HistoryPage"
 import { FavoritesPage } from "./FavoritesPage"
 import { InputPage } from "./InputPage"
 
-// alert 是 Scripting 运行时提供的全局函数，类型检查器未收录，这里补充声明
-// 以便消除误报（不影响运行时行为）
-declare function alert(message: string): Promise<void>
 declare const Dialog: any
+async function alert(message: string): Promise<void> {
+  await Dialog.alert({ message })
+}
 declare const FileManager: any
 declare const Data: any
 declare const Keychain: any

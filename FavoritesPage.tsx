@@ -1,8 +1,10 @@
 import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
 import { FavoriteItem } from "./storage"
-declare function alert(message: string): Promise<void>
 declare const Dialog: any
+async function alert(message: string): Promise<void> {
+  await Dialog.alert({ message })
+}
 import { PresentedBarcodes } from "./BarcodesPage"
 import { CS, schemeProps, lab, sub, ter, cardB, inputT, FullScreenBg } from "./theme"
 

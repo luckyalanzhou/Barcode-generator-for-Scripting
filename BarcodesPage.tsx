@@ -2,8 +2,10 @@ import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, ZS
 import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings } from "./barcode_core"
 import { FavoriteItem } from "./storage"
 import { HistoryItem } from "./storage"
-declare function alert(message: string): Promise<void>
 declare const Dialog: any
+async function alert(message: string): Promise<void> {
+  await Dialog.alert({ message })
+}
 import { CS, schemeProps, lab, sub, FullScreenBg } from "./theme"
 // 新页面：展示生成的条形码（普通页面跳转，非弹出页）
 export function BarcodesPage({

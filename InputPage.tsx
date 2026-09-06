@@ -2,7 +2,10 @@ import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Pic
 import { BarcodeType, BARCODE_TYPES, MAX_BARCODE_ITEMS, typeName, scanTexts } from "./barcode_core"
 import { CS, lab, sub, cardB, capB, inputT } from "./theme"
 
-declare function alert(message: string): Promise<void>
+declare const Dialog: any
+async function alert(message: string): Promise<void> {
+  await Dialog.alert({ message })
+}
 
 type Props = {
   inputRows: string[]
