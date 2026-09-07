@@ -45,17 +45,12 @@ export function HistoryPage({
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
         .navigationTitle("历史记录")
-         .safeAreaInset({ top: { alignment: "trailing", spacing: 0, content: (
-           <HStack modifiers={modifiers().frame({ maxWidth: "infinity", height: 48, alignment: "center" }).padding({ leading: 12, trailing: 12 })}>
-             <Spacer />
-             <Text font={18} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme))}>历史记录</Text>
-             <Spacer />
-             <Button action={onClear} modifiers={modifiers().frame({ width: 48, height: 48, alignment: "center" }).padding(0).font(22).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 14 })}>
-               <Image systemName="trash" renderingMode="template" />
-             </Button>
-           </HStack>
-         ) } })
         .navigationBarTitleDisplayMode("inline")
+        .toolbar({
+          topBarTrailing: <Button action={onClear} modifiers={modifiers().frame({ width: 40, height: 40, alignment: "center" }).padding(0).font(20).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}>
+            <Image systemName="trash" renderingMode="template" />
+          </Button>,
+        })
         .navigationDestination({
           isPresented: selectedHistory != null,
           onChanged: (value: boolean) => {
