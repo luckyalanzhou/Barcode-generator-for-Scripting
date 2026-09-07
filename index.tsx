@@ -372,6 +372,17 @@ function View() {
     Storage.remove(HISTORY_KEY)
   }
 
+  // 长按历史 Tab 时提供清空入口，执行前仍由 clearHistory 统一询问确认。
+  async function showHistoryActions() {
+    if (tabSelection.value !== "history") return
+    const choice = await Dialog.actionSheet({
+      title: "历史纪录",
+      cancelButton: true,
+      actions: [{ label: "清空历史" }],
+    })
+    if (choice === 0) await clearHistory()
+  }
+
   function editFavorite(texts: string[], type: BarcodeType) {
     setInputRows(texts.length > 0 ? [...texts] : [""])
     setBarcodeType(type)
@@ -701,6 +712,10 @@ function View() {
             // 因此各导航页面（设置/条码/历史/收藏）在自己的根 ScrollView 上分别应用 schemeProps。
             <TabView
               selection={tabSelection}
+              onLongPressGesture={{
+                minDuration: 600,
+                perform: () => { void showHistoryActions() },
+              }}
               onDragGesture={{
                 minDistance: 20,
                 coordinateSpace: "local",
