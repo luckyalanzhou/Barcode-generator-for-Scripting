@@ -93,15 +93,15 @@ export function BarcodesPage({
         barW={settings.barWidth}
         barH={settings.barHeight}
         quiet={10}
-        barColor={settings.barColor}
-        bgColor={settings.bgColor}
+        barColor="#000000"
+        bgColor="#ffffff"
       />
     )
   }
 
   // 按设置渲染条码下方的内容文字
   function renderText(item: BarcodeItem, textColor?: any) {
-    if (!settings.showText || !itemOk(item)) return null
+    if (!itemOk(item)) return null
     return (
       <Text font={settings.textSize} modifiers={modifiers().foregroundStyle(textColor ?? lab(colorScheme))}>
         {item.text}
@@ -186,9 +186,8 @@ export function BarcodesPage({
         <VStack alignment="center" spacing={settings.margin} padding={20}>
           {items.map((item) => (
             <VStack alignment="center" spacing={6}>
-              {settings.textPosition === "top" && renderText(item, "#111111")}
               {renderItemContent(item)}
-              {settings.textPosition === "bottom" && renderText(item, "#111111")}
+              {renderText(item, "#111111")}
             </VStack>
           ))}
         </VStack>
@@ -249,9 +248,8 @@ export function BarcodesPage({
           >
             {items.map((item) => (
               <VStack alignment="center" spacing={6}>
-                {settings.textPosition === "top" && renderText(item)}
                 {renderItemContent(item, Math.min(Device.screen.width - 40, 300))}
-                {settings.textPosition === "bottom" && renderText(item)}
+                {renderText(item)}
                 {itemOk(item) && settings.showFormat && (
                   <Text
                     font={12}

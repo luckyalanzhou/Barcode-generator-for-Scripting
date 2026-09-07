@@ -67,12 +67,8 @@ export function typeName(type: BarcodeType): string {
 }
 
 // ============ 样式设置 ============
-// 条码颜色 / 背景颜色 / 显示文字 / 文字位置 / 文字大小 / 条码高度 / 条码宽度（模块宽） / 边距（静区） / 显示条码格式 / 外观（跟随系统/浅色/深色）
+// 文字大小 / 条码高度 / 条码宽度（模块宽） / 边距（静区） / 显示条码格式 / 外观（跟随系统/浅色/深色）
 export interface StyleSettings {
-  barColor: string
-  bgColor: string
-  showText: boolean
-  textPosition: "top" | "bottom"
   textSize: number
   barHeight: number
   barWidth: number
@@ -82,10 +78,6 @@ export interface StyleSettings {
 }
 
 export const DEFAULT_STYLE: StyleSettings = {
-  barColor: "#000000",
-  bgColor: "#ffffff",
-  showText: true,
-  textPosition: "bottom",
   textSize: 14,
   barHeight: 80,
   barWidth: 2,

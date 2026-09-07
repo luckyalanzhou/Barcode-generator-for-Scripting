@@ -332,7 +332,14 @@ function View() {
   }
 
   // 清空最近生成历史
-  function clearHistory() {
+  async function clearHistory() {
+    const confirmed = await Dialog.confirm({
+      title: "清空历史记录",
+      message: "确定要清空全部历史记录吗？此操作无法撤销。",
+      cancelLabel: "取消",
+      confirmLabel: "清空",
+    })
+    if (!confirmed) return
     setHistory([])
     Storage.remove(HISTORY_KEY)
   }

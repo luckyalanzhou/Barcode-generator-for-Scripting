@@ -198,7 +198,18 @@ export function interchangeFoldersToPaths(backup: InterchangeBackup): string[] {
   const favoritePaths = backup.favorites.map((favorite) => joinFolder(favorite.rootFolder, favorite.subFolder))
   return Array.from(new Set([...paths, ...favoritePaths])).filter((path) => path.length > 0)
 }
-export function loadSettings(): StyleSettings { const saved = Storage.get<Partial<StyleSettings>>(SETTINGS_KEY); return { ...DEFAULT_STYLE, ...(saved && typeof saved === "object" ? saved : {}) } }
+export function loadSettings(): StyleSettings {
+  const saved = Storage.get<Partial<StyleSettings>>(SETTINGS_KEY)
+  if (!saved || typeof saved !== "object") return { ...DEFAULT_STYLE }
+  return {
+    textSize: typeof saved.textSize === "number" ? saved.textSize : DEFAULT_STYLE.textSize,
+    barHeight: typeof saved.barHeight === "number" ? saved.barHeight : DEFAULT_STYLE.barHeight,
+    barWidth: typeof saved.barWidth === "number" ? saved.barWidth : DEFAULT_STYLE.barWidth,
+    margin: typeof saved.margin === "number" ? saved.margin : DEFAULT_STYLE.margin,
+    showFormat: typeof saved.showFormat === "boolean" ? saved.showFormat : DEFAULT_STYLE.showFormat,
+    colorScheme: saved.colorScheme === "system" || saved.colorScheme === "light" || saved.colorScheme === "dark" ? saved.colorScheme : DEFAULT_STYLE.colorScheme,
+  }
+}
 export function saveSettings(settings: StyleSettings) { Storage.set(SETTINGS_KEY, settings) }
 function readOldICloudJSON<T>(fileName: string): T | null { if (!FileManager.isiCloudEnabled) return null; const path = `${FileManager.iCloudDocumentsDirectory}/${fileName}`; if (!FileManager.existsSync(path)) return null; try { return JSON.parse(FileManager.readAsStringSync(path)) as T } catch { return null } }
 function migrateLegacyData() { const importedFavorites = Storage.get<FavoriteItem[]>("barcode_generator_legacy_favorites", { shared: true }); const importedHistory = Storage.get<HistoryItem[]>("barcode_generator_legacy_history", { shared: true }); if (!Storage.contains(FAVORITES_KEY) && Array.isArray(importedFavorites)) saveFavorites(importedFavorites); if (!Storage.contains(HISTORY_KEY) && Array.isArray(importedHistory)) saveHistory(importedHistory) }
