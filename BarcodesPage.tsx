@@ -10,8 +10,8 @@ import { CS, schemeProps, lab, sub, FullScreenBg } from "./theme"
 
 function ResultActionButton({ icon, title, color, action }: { icon: string; title: string; color: any; action: () => void }) {
   return (
-    <Button action={action} buttonStyle="plain" modifiers={modifiers().frame({ width: 52, height: 52, alignment: "center" }).padding(0)}>
-      <VStack alignment="center" spacing={2}>
+    <Button action={action} buttonStyle="plain" modifiers={modifiers().frame({ width: 60, height: 56, alignment: "center" }).padding(0).contentShape({ type: "rect", cornerRadius: 10 })}>
+      <VStack alignment="center" spacing={2} modifiers={modifiers().frame({ width: 60, height: 56, alignment: "center" })}>
         <Image systemName={icon} renderingMode="template" modifiers={modifiers().font(17).foregroundStyle(color)} />
         <Text font={10} modifiers={modifiers().foregroundStyle(color)}>{title}</Text>
       </VStack>

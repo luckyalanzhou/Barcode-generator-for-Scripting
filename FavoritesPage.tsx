@@ -1,4 +1,4 @@
-import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, modifiers, useState } from "scripting"
+import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
 import { FavoriteItem } from "./storage"
 declare const Dialog: any
@@ -57,6 +57,7 @@ export function FavoritesPage({
 }) {
   // 收藏搜索关键字（空表示不筛选）；页面级状态，关闭时重置
   const [favoriteQuery, setFavoriteQuery] = useState("")
+  const [selectedFavorite, setSelectedFavorite] = useState<{ favorite: FavoriteItem; items: BarcodeItem[] } | null>(null)
   // 默认折叠所有已有文件夹，用户可点击箭头展开
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
     () => new Set([
@@ -324,23 +325,10 @@ export function FavoritesPage({
     folder ? !folder.includes("/") : filteredFavorites.some((fav) => !(fav.folder || ""))
   )
 
-  // 点击收藏：以新页面呈现条码页（不在收藏页内替换），返回键直接退回收藏列表
+  // 点击收藏：交给 NavigationStack 推入原生导航页，系统会提供返回按钮和侧滑返回。
   async function selectFavorite(fav: FavoriteItem) {
     const barcodeItems = await buildItems(fav.texts, fav.type)
-    await Navigation.present({
-      element: (
-        <PresentedBarcodes
-          items={barcodeItems}
-          settings={settings}
-          favorites={favorites}
-          onFavorite={onFavorite}
-          onUnfavorite={() => onRemove(fav.id)}
-          onEdit={() => onEdit(fav.texts, fav.type)}
-          showCustomBack={false}
-        />
-      ),
-      modalPresentationStyle: "fullScreen",
-    })
+    setSelectedFavorite({ favorite: fav, items: barcodeItems })
   }
 
   return (
@@ -349,7 +337,24 @@ export function FavoritesPage({
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
         .navigationTitle("收藏")
-        .navigationBarTitleDisplayMode("inline")}
+        .navigationBarTitleDisplayMode("inline")
+        .navigationDestination({
+          isPresented: selectedFavorite != null,
+          onChanged: (value: boolean) => {
+            if (!value) setSelectedFavorite(null)
+          },
+          content: selectedFavorite ? (
+            <PresentedBarcodes
+              items={selectedFavorite.items}
+              settings={settings}
+              favorites={favorites}
+              onFavorite={onFavorite}
+              onUnfavorite={() => onRemove(selectedFavorite.favorite.id)}
+              onEdit={() => onEdit(selectedFavorite.favorite.texts, selectedFavorite.favorite.type)}
+              showCustomBack={false}
+            />
+          ) : <Text />,
+        })}
     >
       <VStack alignment="center" spacing={8} padding={16}>
         <VStack alignment="leading" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
