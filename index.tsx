@@ -6,6 +6,8 @@ import {
   ScrollView,
   ScrollViewReader,
   ScrollViewProxy,
+  TabView,
+  Tab,
   VStack,
   HStack,
   ZStack,
@@ -16,6 +18,7 @@ import {
   Spacer,
   modifiers,
   useState,
+  useObservable,
   useRef,
   useEffect,
   useKeyboardVisible,
@@ -43,6 +46,7 @@ import {
 import { HistoryItem, FavoriteItem, InterchangeBackup, createInterchangeBackup, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./storage"
 const HISTORY_KEY = "recent_history"
 const HISTORY_MAX = 20
+type HomeTab = "generate" | "favorites" | "history" | "settings"
 function makeRowId(): string { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 import { validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid } from "./validation"
 import { CS, schemeProps, lab, sub, ter, cardB, capB, pageB, inputT, FullScreenBg } from "./theme"
@@ -127,13 +131,8 @@ function View() {
   const colorScheme = settings.colorScheme
   // 键盘是否可见（用于在输入框右上角显示「完成」按钮收起键盘）
   const keyboardVisible = useKeyboardVisible()
-  // 是否打开样式设置页（使用 NavigationStack 全屏导航，不使用弹出式 modal）
-  const [showSettings, setShowSettings] = useState(false)
-  // 是否打开历史记录页
-  const [showHistory, setShowHistory] = useState(false)
-  // 是否打开收藏页
-  const [showFavorites, setShowFavorites] = useState(false)
-  const [favoritesViewVersion, setFavoritesViewVersion] = useState(0)
+  // 官方 TabView 使用 Observable 管理当前页面，点击和左右滑动共用同一状态。
+  const tabSelection = useObservable<HomeTab>("generate")
   // 用于可靠激活输入：点击输入框时自增，触发输入框 remount+autofocus 唤出键盘
   const [inputFocusTick, setInputFocusTick] = useState(0)
   // 生成中的同步锁：同时拦截快速连点和异步生成期间的重复跳转。
@@ -166,7 +165,7 @@ function View() {
       // 运行 URL 已进入脚本后立即打开扫描，不再等待首页动画
       void scanInput()
     } else if (action === "favorites") {
-      setTimeout(() => { setShowFavorites(true) }, 250)
+      setTimeout(() => { tabSelection.setValue("favorites") }, 250)
     }
   }, [])
 
@@ -348,7 +347,7 @@ function View() {
     setInputRows(texts.length > 0 ? [...texts] : [""])
     setBarcodeType(type)
     setForceUnfavorited(true)
-    setShowFavorites(false)
+    tabSelection.setValue("generate")
   }
 
   // 更新样式设置并持久化
@@ -590,61 +589,6 @@ function View() {
                 />
               ),
             })
-             .navigationDestination({
-               isPresented: showSettings,
-               onChanged: setShowSettings,
-               content: (
-                 <SettingsPage
-                   settings={settings}
-                   onChange={updateSettings}
-                   onClose={() => setShowSettings(false)}
-                 />
-               ),
-             })
-             .navigationDestination({
-               isPresented: showHistory,
-              onChanged: setShowHistory,
-              content: (
-                <HistoryPage
-                  history={history}
-                  colorScheme={settings.colorScheme}
-                  settings={settings}
-                  favorites={favorites}
-                  barcodeType={barcodeType}
-                  buildItems={buildItems}
-                  onFavorite={addFavorite}
-                  onClose={() => setShowHistory(false)}
-                  onClear={clearHistory}
-                />
-              ),
-            })
-            .navigationDestination({
-              isPresented: showFavorites,
-              onChanged: setShowFavorites,
-              content: (
-                <FavoritesPage
-                  key={`favorites-${favoritesViewVersion}`}
-                  favorites={favorites}
-                  colorScheme={settings.colorScheme}
-                  settings={settings}
-                  barcodeType={barcodeType}
-                  buildItems={buildItems}
-                  onFavorite={addFavorite}
-                  onClose={() => setShowFavorites(false)}
-                  onRemove={removeFavorite}
-                  onRenameFolder={renameFolder}
-                   onCreateFolder={createFolder}
-                   onDeleteFolder={deleteFolder}
-                   onMoveFolder={moveFolder}
-                   folders={folders}
-                   onRenameFavorite={renameFavorite}
-                  onMoveFavorite={moveFavorite}
-                  onEdit={editFavorite}
-                   onExportBackup={() => { void exportBackup() }}
-                   onImportBackup={() => { void importBackup() }}
-                />
-              ),
-            })
                      rootMods = rootMods
              .safeAreaInset({
                top: {
@@ -726,6 +670,8 @@ function View() {
             // 不能把 preferredColorScheme 加在这里——运行中切换外观会改变这个「导航宿主」视图的
             // preferredColorScheme，导致框架重置导航栈、把已 push 的设置页弹回首页。
             // 因此各导航页面（设置/条码/历史/收藏）在自己的根 ScrollView 上分别应用 schemeProps。
+            <TabView selection={tabSelection}>
+              <Tab title="生成" systemImage="barcode.viewfinder" value="generate">
             <FullScreenBg cs={colorScheme}>
               <VStack
                 spacing={0}
@@ -795,28 +741,52 @@ function View() {
            {/* 每个输入框已经代表一条独立条码 */}
          </VStack>
                 </ScrollView>
-                <HStack spacing={6} modifiers={modifiers().frame({ maxWidth: 'infinity' }).padding({ top: 10, bottom: 10, leading: 12, trailing: 12 }).background({ style: colorScheme === "system" ? "regularMaterial" : colorScheme === "dark" ? "rgba(17,19,25,0.96)" : "rgba(248,249,252,0.72)", shape: { type: "rect", cornerRadius: 26 } }).overlay({ alignment: "center", content: <RoundedRectangle cornerRadius={26} stroke={{ shapeStyle: colorScheme === "system" ? "separator" : colorScheme === "dark" ? "rgba(72,80,96,0.58)" : "rgba(153,163,180,0.62)", strokeStyle: { lineWidth: 1 } }} /> }).padding({ leading: 14, trailing: 14, bottom: 12 })}>
-                  <Button action={() => { flashPressed("tab-favorites"); setShowFavorites(true) }} modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 48 }).padding(0).foregroundStyle(pressedKey === "tab-favorites" ? "#1d4ed8" : (colorScheme === "dark" ? "#f4f7ff" : colorScheme === "system" ? "label" : "#334155"))}>
-                    <VStack alignment="center" spacing={3} modifiers={modifiers().padding({ top: 6, bottom: 6, leading: 25, trailing: 25 }).background({ style: colorScheme === "system" ? "ultraThinMaterial" : colorScheme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.22)", shape: { type: "rect", cornerRadius: 14 } }).overlay({ alignment: "center", content: <RoundedRectangle cornerRadius={14} stroke={{ shapeStyle: colorScheme === "system" ? "tertiaryLabel" : colorScheme === "dark" ? "rgba(150,160,180,0.32)" : "rgba(170,180,195,0.30)", strokeStyle: { lineWidth: 1 } }} /> })}>
-                      <Image systemName="heart" renderingMode="template" modifiers={modifiers().font(18)} />
-                      <Text font={11} fontWeight="medium">收藏</Text>
-                    </VStack>
-                  </Button>
-                  <Button action={() => { flashPressed("tab-history"); setShowHistory(true) }} modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 48 }).padding(0).foregroundStyle(pressedKey === "tab-history" ? "#1d4ed8" : (colorScheme === "dark" ? "#f4f7ff" : colorScheme === "system" ? "label" : "#334155"))}>
-                    <VStack alignment="center" spacing={3} modifiers={modifiers().padding({ top: 6, bottom: 6, leading: 25, trailing: 25 }).background({ style: colorScheme === "system" ? "ultraThinMaterial" : colorScheme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.22)", shape: { type: "rect", cornerRadius: 14 } }).overlay({ alignment: "center", content: <RoundedRectangle cornerRadius={14} stroke={{ shapeStyle: colorScheme === "system" ? "tertiaryLabel" : colorScheme === "dark" ? "rgba(150,160,180,0.32)" : "rgba(170,180,195,0.30)", strokeStyle: { lineWidth: 1 } }} /> })}>
-                      <Image systemName="clock" renderingMode="template" modifiers={modifiers().font(18)} />
-                      <Text font={11} fontWeight="medium">历史</Text>
-                    </VStack>
-                  </Button>
-                   <Button action={() => { flashPressed("tab-settings"); setShowSettings(true) }} modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 48 }).padding(0).foregroundStyle(pressedKey === "tab-settings" ? "#1d4ed8" : (colorScheme === "dark" ? "#f4f7ff" : colorScheme === "system" ? "label" : "#334155"))}>
-                     <VStack alignment="center" spacing={3} modifiers={modifiers().padding({ top: 6, bottom: 6, leading: 25, trailing: 25 }).background({ style: colorScheme === "system" ? "ultraThinMaterial" : colorScheme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.22)", shape: { type: "rect", cornerRadius: 14 } }).overlay({ alignment: "center", content: <RoundedRectangle cornerRadius={14} stroke={{ shapeStyle: colorScheme === "system" ? "tertiaryLabel" : colorScheme === "dark" ? "rgba(150,160,180,0.32)" : "rgba(170,180,195,0.30)", strokeStyle: { lineWidth: 1 } }} /> })}>
-                       <Image systemName="gearshape" renderingMode="template" modifiers={modifiers().font(18)} />
-                       <Text font={11} fontWeight="medium">设置</Text>
-                     </VStack>
-                   </Button>
-                </HStack>
                </VStack>
             </FullScreenBg>
+              </Tab>
+              <Tab title="收藏" systemImage="heart" value="favorites">
+                <FavoritesPage
+                  favorites={favorites}
+                  colorScheme={settings.colorScheme}
+                  settings={settings}
+                  barcodeType={barcodeType}
+                  buildItems={buildItems}
+                  onFavorite={addFavorite}
+                  onClose={() => tabSelection.setValue("generate")}
+                  onRemove={removeFavorite}
+                  onRenameFolder={renameFolder}
+                  onCreateFolder={createFolder}
+                  onDeleteFolder={deleteFolder}
+                  onMoveFolder={moveFolder}
+                  folders={folders}
+                  onRenameFavorite={renameFavorite}
+                  onMoveFavorite={moveFavorite}
+                  onEdit={editFavorite}
+                  onExportBackup={() => { void exportBackup() }}
+                  onImportBackup={() => { void importBackup() }}
+                />
+              </Tab>
+              <Tab title="历史" systemImage="clock" value="history">
+                <HistoryPage
+                  history={history}
+                  colorScheme={settings.colorScheme}
+                  settings={settings}
+                  favorites={favorites}
+                  barcodeType={barcodeType}
+                  buildItems={buildItems}
+                  onFavorite={addFavorite}
+                  onClose={() => tabSelection.setValue("generate")}
+                  onClear={clearHistory}
+                />
+              </Tab>
+              <Tab title="设置" systemImage="gearshape" value="settings">
+                <SettingsPage
+                  settings={settings}
+                  onChange={updateSettings}
+                  onClose={() => tabSelection.setValue("generate")}
+                />
+              </Tab>
+            </TabView>
           )
         }}
       </ScrollViewReader>
