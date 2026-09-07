@@ -47,6 +47,7 @@ import { HistoryItem, FavoriteItem, InterchangeBackup, createInterchangeBackup, 
 const HISTORY_KEY = "recent_history"
 const HISTORY_MAX = 20
 type HomeTab = "generate" | "favorites" | "history" | "settings"
+const HOME_TABS: HomeTab[] = ["generate", "favorites", "history", "settings"]
 function makeRowId(): string { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 import { validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid } from "./validation"
 import { CS, schemeProps, lab, sub, ter, cardB, capB, pageB, inputT, FullScreenBg } from "./theme"
@@ -133,6 +134,19 @@ function View() {
   const keyboardVisible = useKeyboardVisible()
   // 官方 TabView 使用 Observable 管理当前页面，点击和左右滑动共用同一状态。
   const tabSelection = useObservable<HomeTab>("generate")
+
+  // Scripting 的 TabView 文档只定义了标签选择，不保证底部样式自带分页滑动。
+  // 使用官方 onDragGesture 在 TabView 层补上横向切换，避免给每个页面再套一层布局。
+  function handleTabSwipe(details: { translation: { x: number, y: number } }) {
+    const { x, y } = details.translation
+    // 横向距离不足或纵向分量更大时交给页面自己的滚动处理。
+    if (Math.abs(x) < 45 || Math.abs(x) <= Math.abs(y)) return
+    const currentIndex = HOME_TABS.indexOf(tabSelection.value)
+    const nextIndex = currentIndex + (x < 0 ? 1 : -1)
+    if (nextIndex >= 0 && nextIndex < HOME_TABS.length) {
+      tabSelection.setValue(HOME_TABS[nextIndex])
+    }
+  }
   // 用于可靠激活输入：点击输入框时自增，触发输入框 remount+autofocus 唤出键盘
   const [inputFocusTick, setInputFocusTick] = useState(0)
   // 生成中的同步锁：同时拦截快速连点和异步生成期间的重复跳转。
@@ -670,7 +684,14 @@ function View() {
             // 不能把 preferredColorScheme 加在这里——运行中切换外观会改变这个「导航宿主」视图的
             // preferredColorScheme，导致框架重置导航栈、把已 push 的设置页弹回首页。
             // 因此各导航页面（设置/条码/历史/收藏）在自己的根 ScrollView 上分别应用 schemeProps。
-            <TabView selection={tabSelection}>
+            <TabView
+              selection={tabSelection}
+              onDragGesture={{
+                minDistance: 20,
+                coordinateSpace: "local",
+                onEnded: handleTabSwipe,
+              }}
+            >
               <Tab title="生成" systemImage="barcode.viewfinder" value="generate">
             <FullScreenBg cs={colorScheme}>
               <VStack
