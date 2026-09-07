@@ -44,8 +44,6 @@ export function HistoryPage({
     <ScrollView
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
-        .navigationTitle("历史记录")
-        .navigationBarTitleDisplayMode("inline")
         .toolbar({
           topBarTrailing: <Button action={onClear} modifiers={modifiers().frame({ width: 40, height: 40, alignment: "center" }).padding(0).font(20).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}>
             <Image systemName="trash" renderingMode="template" />
@@ -70,6 +68,13 @@ export function HistoryPage({
         })}
     >
       <VStack alignment="center" spacing={12} padding={16}>
+        <Text
+          font={24}
+          fontWeight="bold"
+          modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'center' }).padding({ top: 4, bottom: 4 }).foregroundStyle(lab(colorScheme))}
+        >
+          历史纪录
+        </Text>
         {history.length === 0 ? (
           <Text
             font={16}

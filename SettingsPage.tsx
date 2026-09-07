@@ -115,11 +115,16 @@ export function SettingsPage({
     <ScrollView
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
-        
-        .navigationTitle("设置")
-         .navigationBarTitleDisplayMode("inline")}
+        }
     >
       <VStack alignment="leading" spacing={14} padding={{ top: 16, leading: 24, bottom: 24, trailing: 24 }}>
+        <Text
+          font={24}
+          fontWeight="bold"
+          modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'center' }).padding({ top: 4, bottom: 4 }).foregroundStyle(lab(colorScheme))}
+        >
+          设置
+        </Text>
         {/* 外观：跟随系统 / 浅色 / 深色 */}
         <HStack alignment="center" spacing={10} modifiers={cardMods()}>
           <Text

@@ -336,8 +336,6 @@ export function FavoritesPage({
     <ScrollView
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
-        .navigationTitle("收藏")
-        .navigationBarTitleDisplayMode("inline")
         .navigationDestination({
           isPresented: selectedFavorite != null,
           onChanged: (value: boolean) => {
@@ -357,12 +355,15 @@ export function FavoritesPage({
         })}
     >
       <VStack alignment="center" spacing={8} padding={16}>
+        <Text
+          font={24}
+          fontWeight="bold"
+          modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'center' }).padding({ top: 4, bottom: 4 }).foregroundStyle(lab(colorScheme))}
+        >
+          收藏
+        </Text>
         <VStack alignment="leading" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
           <HStack alignment="center" spacing={8}>
-            <VStack alignment="leading" spacing={2}>
-              <Text font={17} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme))}>备份与恢复</Text>
-              <Text font={11} modifiers={modifiers().foregroundStyle(sub(colorScheme))}>按文件夹保存收藏，支持 ZIP 备份</Text>
-            </VStack>
             <Spacer />
             <Text font={12} modifiers={modifiers().foregroundStyle(ter(colorScheme))}>{favorites.length} 条</Text>
           </HStack>
