@@ -137,8 +137,23 @@ function View() {
 
   // Scripting 的 TabView 文档只定义了标签选择，不保证底部样式自带分页滑动。
   // 使用官方 onDragGesture 在 TabView 层补上横向切换，避免给每个页面再套一层布局。
-  function handleTabSwipe(details: { translation: { x: number, y: number } }) {
-    const { x, y } = details.translation
+  function handleTabSwipe(details: {
+    location: { x: number, y: number },
+    startLocation: { x: number, y: number },
+    translation: { x: number, y: number },
+  }) {
+    // 以起点和终点计算方向。部分 Scripting/iOS 版本对 translation 的符号
+    // 处理不稳定，坐标差值更可靠；translation 仅作为兼容回退。
+    const locationX = details.location?.x
+    const startX = details.startLocation?.x
+    const locationY = details.location?.y
+    const startY = details.startLocation?.y
+    const x = Number.isFinite(locationX) && Number.isFinite(startX)
+      ? locationX - startX
+      : details.translation.x
+    const y = Number.isFinite(locationY) && Number.isFinite(startY)
+      ? locationY - startY
+      : details.translation.y
     // 横向距离不足或纵向分量更大时交给页面自己的滚动处理。
     if (Math.abs(x) < 45 || Math.abs(x) <= Math.abs(y)) return
     const currentIndex = HOME_TABS.indexOf(tabSelection.value)
