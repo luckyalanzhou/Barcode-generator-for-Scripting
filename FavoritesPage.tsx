@@ -363,10 +363,6 @@ export function FavoritesPage({
           收藏
         </Text>
         <VStack alignment="leading" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-          <HStack alignment="center" spacing={8}>
-            <Spacer />
-            <Text font={12} modifiers={modifiers().foregroundStyle(ter(colorScheme))}>{favorites.length} 条</Text>
-          </HStack>
           <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
             <Button title="导出备份" systemImage="square.and.arrow.up" action={onExportBackup} buttonStyle="borderedProminent" modifiers={modifiers().frame({ maxWidth: 'infinity' })} />
             <Button title="导入备份" systemImage="square.and.arrow.down" action={onImportBackup} buttonStyle="bordered" modifiers={modifiers().frame({ maxWidth: 'infinity' })} />
