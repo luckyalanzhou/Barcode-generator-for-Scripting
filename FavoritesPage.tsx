@@ -333,9 +333,10 @@ export function FavoritesPage({
           items={barcodeItems}
           settings={settings}
           favorites={favorites}
-           onFavorite={onFavorite}
-           onUnfavorite={() => onRemove(fav.id)}
-           onEdit={() => onEdit(fav.texts, fav.type)}
+          onFavorite={onFavorite}
+          onUnfavorite={() => onRemove(fav.id)}
+          onEdit={() => onEdit(fav.texts, fav.type)}
+          showCustomBack={false}
         />
       ),
       modalPresentationStyle: "fullScreen",

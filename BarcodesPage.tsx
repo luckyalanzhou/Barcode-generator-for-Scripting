@@ -7,6 +7,17 @@ async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
 }
 import { CS, schemeProps, lab, sub, FullScreenBg } from "./theme"
+
+function ResultActionButton({ icon, title, color, action }: { icon: string; title: string; color: any; action: () => void }) {
+  return (
+    <Button action={action} buttonStyle="plain" modifiers={modifiers().frame({ width: 52, height: 52, alignment: "center" }).padding(0)}>
+      <VStack alignment="center" spacing={2}>
+        <Image systemName={icon} renderingMode="template" modifiers={modifiers().font(17).foregroundStyle(color)} />
+        <Text font={10} modifiers={modifiers().foregroundStyle(color)}>{title}</Text>
+      </VStack>
+    </Button>
+  )
+}
 // 新页面：展示生成的条形码（普通页面跳转，非弹出页）
 export function BarcodesPage({
   items,
@@ -213,16 +224,10 @@ export function BarcodesPage({
                  )}
                  <Spacer />
                  {onEdit && (
-                   <Button action={() => { flashPressed("edit"); onEdit() }} modifiers={modifiers().frame({ width: 48, height: 48, alignment: 'center' }).padding(0).font(22).fontWeight("bold").foregroundStyle(pressedKey === "edit" ? "#1e40af" : "#3b82f6").contentShape({ type: "rect", cornerRadius: 14 })}>
-                     <Image systemName="pencil" renderingMode="template" />
-                   </Button>
+                   <ResultActionButton icon="pencil" title="编辑" color={pressedKey === "edit" ? "#1e40af" : "#3b82f6"} action={() => { flashPressed("edit"); onEdit?.() }} />
                  )}
-                 <Button action={collectFavorite} modifiers={modifiers().frame({ width: 48, height: 48, alignment: 'center' }).padding(0).font(24).fontWeight("bold").foregroundStyle(pressedKey === "fav" ? "#D97706" : "#F59E0B").contentShape({ type: "rect", cornerRadius: 14 })}>
-                   <Image systemName={isFavorited ? "star.fill" : "star"} renderingMode="template" />
-                 </Button>
-                 <Button action={() => { flashPressed("share"); shareImage() }} modifiers={modifiers().frame({ width: 48, height: 48, alignment: 'center' }).padding(0).font(24).fontWeight("bold").foregroundStyle(pressedKey === "share" ? "#1e40af" : "#3b82f6").contentShape({ type: "rect", cornerRadius: 14 })}>
-                   <Image systemName="square.and.arrow.up" renderingMode="template" />
-                 </Button>
+                 <ResultActionButton icon={isFavorited ? "star.fill" : "star"} title="收藏" color={pressedKey === "fav" ? "#D97706" : "#F59E0B"} action={() => { flashPressed("fav"); void collectFavorite() }} />
+                 <ResultActionButton icon="square.and.arrow.up" title="分享" color={pressedKey === "share" ? "#1e40af" : "#3b82f6"} action={() => { flashPressed("share"); void shareImage() }} />
                </HStack>
              ),
            },
@@ -292,6 +297,7 @@ export function PresentedBarcodes({
   onFavorite,
   onUnfavorite,
   onEdit,
+  showCustomBack = true,
 }: {
   items: BarcodeItem[]
   settings: StyleSettings
@@ -299,6 +305,7 @@ export function PresentedBarcodes({
   onFavorite: (name: string, folder: string) => void
   onUnfavorite?: () => void
   onEdit?: () => void
+  showCustomBack?: boolean
 }) {
   const dismiss = Navigation.useDismiss()
   function handleEdit() {
@@ -316,6 +323,7 @@ export function PresentedBarcodes({
       onFavorite={onFavorite}
       onUnfavorite={onUnfavorite}
       onEdit={onEdit ? handleEdit : undefined}
+      showCustomBack={showCustomBack}
     />
   )
 }
