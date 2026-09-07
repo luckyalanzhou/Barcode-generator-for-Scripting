@@ -117,6 +117,23 @@ export function HistoryPage({
             </Button>
           ))
         )}
+        {history.length > 0 && (
+          <HStack
+            alignment="center"
+            modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'trailing' }).padding({ top: 4, bottom: 4 })}
+          >
+            <Spacer />
+            <Button
+              action={onClear}
+              modifiers={modifiers().font(15).foregroundStyle("#3b82f6").contentShape({ type: "rect", cornerRadius: 8 })}
+            >
+              <HStack spacing={5}>
+                <Image systemName="trash" renderingMode="template" />
+                <Text font={15}>一键清空历史</Text>
+              </HStack>
+            </Button>
+          </HStack>
+        )}
       </VStack>
     </ScrollView>
     </FullScreenBg>
