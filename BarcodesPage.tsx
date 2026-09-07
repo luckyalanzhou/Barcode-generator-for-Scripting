@@ -29,6 +29,8 @@ export function BarcodesPage({
   onEdit,
   forceUnfavorited = false,
   showCustomBack = true,
+  showFavoriteAction = true,
+  showShareAction = true,
 }: {
   items: BarcodeItem[]
   settings: StyleSettings
@@ -39,6 +41,8 @@ export function BarcodesPage({
   onEdit?: () => void
   forceUnfavorited?: boolean
   showCustomBack?: boolean
+  showFavoriteAction?: boolean
+  showShareAction?: boolean
 }) {
   const colorScheme = settings.colorScheme
   const [isSaving, setIsSaving] = useState(false)
@@ -226,8 +230,8 @@ export function BarcodesPage({
                  {onEdit && (
                    <ResultActionButton icon="pencil" title="编辑" color={pressedKey === "edit" ? "#1e40af" : "#3b82f6"} action={() => { flashPressed("edit"); onEdit?.() }} />
                  )}
-                 <ResultActionButton icon={isFavorited ? "star.fill" : "star"} title="收藏" color={pressedKey === "fav" ? "#D97706" : "#F59E0B"} action={() => { flashPressed("fav"); void collectFavorite() }} />
-                 <ResultActionButton icon="square.and.arrow.up" title="分享" color={pressedKey === "share" ? "#1e40af" : "#3b82f6"} action={() => { flashPressed("share"); void shareImage() }} />
+                 {showFavoriteAction && <ResultActionButton icon={isFavorited ? "star.fill" : "star"} title="收藏" color={pressedKey === "fav" ? "#D97706" : "#F59E0B"} action={() => { flashPressed("fav"); void collectFavorite() }} />}
+                 {showShareAction && <ResultActionButton icon="square.and.arrow.up" title="分享" color={pressedKey === "share" ? "#1e40af" : "#3b82f6"} action={() => { flashPressed("share"); void shareImage() }} />}
                </HStack>
              ),
            },
@@ -298,6 +302,8 @@ export function PresentedBarcodes({
   onUnfavorite,
   onEdit,
   showCustomBack = true,
+  showFavoriteAction = true,
+  showShareAction = true,
 }: {
   items: BarcodeItem[]
   settings: StyleSettings
@@ -306,6 +312,8 @@ export function PresentedBarcodes({
   onUnfavorite?: () => void
   onEdit?: () => void
   showCustomBack?: boolean
+  showFavoriteAction?: boolean
+  showShareAction?: boolean
 }) {
   const dismiss = Navigation.useDismiss()
   function handleEdit() {
@@ -324,6 +332,8 @@ export function PresentedBarcodes({
       onUnfavorite={onUnfavorite}
       onEdit={onEdit ? handleEdit : undefined}
       showCustomBack={showCustomBack}
+      showFavoriteAction={showFavoriteAction}
+      showShareAction={showShareAction}
     />
   )
 }

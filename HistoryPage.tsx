@@ -1,4 +1,4 @@
-import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, modifiers } from "scripting"
+import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
 import { HistoryItem, FavoriteItem } from "./storage"
 import { PresentedBarcodes } from "./BarcodesPage"
@@ -31,20 +31,12 @@ export function HistoryPage({
   onClose: () => void
   onClear: () => void
 }) {
-  // 点击历史条目：以新页面呈现条码页（不在历史页内替换），返回键直接退回历史列表
+  const [selectedHistory, setSelectedHistory] = useState<{ item: HistoryItem; items: BarcodeItem[] } | null>(null)
+
+  // 点击历史条目：交给 NavigationStack 推入原生导航页。
   async function selectHistory(item: HistoryItem) {
     const barcodeItems = await buildItems(item.texts, item.type)
-    await Navigation.present({
-      element: (
-        <PresentedBarcodes
-          items={barcodeItems}
-          settings={settings}
-          favorites={favorites}
-          onFavorite={onFavorite}
-        />
-      ),
-      modalPresentationStyle: "fullScreen",
-    })
+    setSelectedHistory({ item, items: barcodeItems })
   }
 
   return (
@@ -52,6 +44,7 @@ export function HistoryPage({
     <ScrollView
       {...schemeProps(colorScheme)} modifiers={modifiers()
         .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
+        .navigationTitle("历史记录")
          .safeAreaInset({ top: { alignment: "trailing", spacing: 0, content: (
            <HStack modifiers={modifiers().frame({ maxWidth: "infinity", height: 48, alignment: "center" }).padding({ leading: 12, trailing: 12 })}>
              <Spacer />
@@ -62,7 +55,24 @@ export function HistoryPage({
              </Button>
            </HStack>
          ) } })
-        .navigationBarTitleDisplayMode("inline")}
+        .navigationBarTitleDisplayMode("inline")
+        .navigationDestination({
+          isPresented: selectedHistory != null,
+          onChanged: (value: boolean) => {
+            if (!value) setSelectedHistory(null)
+          },
+          content: selectedHistory ? (
+            <PresentedBarcodes
+              items={selectedHistory.items}
+              settings={settings}
+              favorites={favorites}
+              onFavorite={onFavorite}
+              showCustomBack={false}
+              showFavoriteAction={false}
+              showShareAction={false}
+            />
+          ) : <Text />,
+        })}
     >
       <VStack alignment="center" spacing={12} padding={16}>
         {history.length === 0 ? (
