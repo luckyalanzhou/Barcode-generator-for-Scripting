@@ -486,7 +486,6 @@ function View() {
       }
       setFolders(savedFolders)
       setFavorites(savedFavorites)
-      setFavoritesViewVersion((version) => version + 1)
       await alert(`备份导入完成：${rootCount} 个一级文件夹、${childCount} 个二级文件夹、${savedFavorites.length} 条收藏`)
     } catch (error) {
       await Dialog.alert({ title: "备份导入失败", message: error instanceof Error ? error.message : String(error) })
