@@ -526,8 +526,9 @@ function View() {
   // 移动单条收藏到指定文件夹
   function moveFavorite(id: string, folder: string) {
     const source = favorites.find((f) => f.id === id)
-    if (source && (folder === source.folder || folder.startsWith(`${source.folder}/`))) {
-      void alert("不能将收藏移动到当前文件夹或其子文件夹")
+    // 收藏文件可以从一级目录移动到其下的二级目录；只禁止移动到原目录。
+    if (source && folder === (source.folder || "")) {
+      void alert("不能将收藏移动到当前文件夹")
       return
     }
     const next = favorites.map((f) => f.id === id ? { ...f, folder } : f)

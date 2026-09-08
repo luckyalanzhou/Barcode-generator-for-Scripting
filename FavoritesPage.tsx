@@ -182,24 +182,30 @@ export function FavoritesPage({
       const parts = folder.split("/")
       return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
     })))
-    const safeFolders = allFolders.filter((folder) => folder !== currentFolder && !folder.startsWith(`${currentFolder}/`))
+    // 当前目录及其子目录需要保留在导航树中，才能从一级目录进入二级目录。
+    // 具体是否允许作为目标，在“移动到此文件夹”选项处单独判断。
+    const navigationFolders = allFolders
     async function chooseLevel(parent: string): Promise<string | null> {
-      const children = safeFolders.filter((folder) => {
+      const children = navigationFolders.filter((folder) => {
         const parts = folder.split("/")
         return parts.length === (parent ? parent.split("/").length + 1 : 1) &&
           (parent ? folder.startsWith(`${parent}/`) : true)
       }).sort()
-      const labels = parent ? ["移动到此文件夹", ...children.map((f) => f.split("/").pop() || f), "返回"] : [...children.map((f) => f.split("/").pop() || f), "添加文件夹"]
+      const canMoveToParent = parent !== "" && parent !== currentFolder
+      const labels = parent
+        ? [...(canMoveToParent ? ["移动到此文件夹"] : []), ...children.map((f) => f.split("/").pop() || f), "返回"]
+        : [...children.map((f) => f.split("/").pop() || f), "添加文件夹"]
       const choice = await Dialog.actionSheet({ title: parent || "选择目标文件夹", cancelButton: true, actions: labels.map((label) => ({ label })) })
       if (choice === null || choice === undefined) return null
-      if (parent && choice === 0) return parent
+      if (canMoveToParent && choice === 0) return parent
       if (labels[choice] === "返回") return null
       
       if (!parent && labels[choice] === "添加文件夹") return "__create__"
-      const selected = children[parent ? choice - 1 : choice]
+      const childOffset = canMoveToParent ? 1 : 0
+      const selected = children[parent ? choice - childOffset : choice]
       if (!selected) return null
       const selectedDepth = selected.split("/").length
-       const hasChildren = safeFolders.some((folder) => folder.startsWith(`${selected}/`) && folder.split("/").length === selectedDepth + 1)
+       const hasChildren = navigationFolders.some((folder) => folder.startsWith(`${selected}/`) && folder.split("/").length === selectedDepth + 1)
        return hasChildren ? ((await chooseLevel(selected)) ?? null) : selected
     }
     return chooseLevel("")
