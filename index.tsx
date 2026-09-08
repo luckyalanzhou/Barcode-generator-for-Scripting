@@ -612,8 +612,10 @@ function View() {
                   items={items}
                   settings={settings}
                   favorites={favorites}
+                  folders={folders}
                   onClose={() => setShowBarcodes(false)}
                   onFavorite={addFavorite}
+                  onCreateFolder={createFolder}
                   forceUnfavorited={forceUnfavorited}
                   showCustomBack={false}
                 />
@@ -809,9 +811,11 @@ function View() {
                   colorScheme={settings.colorScheme}
                   settings={settings}
                   favorites={favorites}
+                  folders={folders}
                   barcodeType={barcodeType}
                   buildItems={buildItems}
                   onFavorite={addFavorite}
+                  onCreateFolder={createFolder}
                   onClose={() => tabSelection.setValue("generate")}
                   onClear={clearHistory}
                 />

@@ -370,7 +370,9 @@ export function FavoritesPage({
               items={selectedFavorite.items}
               settings={settings}
               favorites={favorites}
+              folders={folders}
               onFavorite={onFavorite}
+              onCreateFolder={onCreateFolder}
               onUnfavorite={() => onRemove(selectedFavorite.favorite.id)}
               onEdit={() => onEdit(selectedFavorite.favorite.texts, selectedFavorite.favorite.type)}
               showCustomBack={false}

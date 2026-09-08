@@ -23,8 +23,10 @@ export function BarcodesPage({
   items,
   settings,
   favorites,
+  folders = [],
   onClose,
   onFavorite,
+  onCreateFolder,
   onUnfavorite,
   onEdit,
   forceUnfavorited = false,
@@ -35,8 +37,10 @@ export function BarcodesPage({
   items: BarcodeItem[]
   settings: StyleSettings
   favorites: FavoriteItem[]
+  folders?: string[]
   onClose: () => void
   onFavorite: (name: string, folder: string) => void
+  onCreateFolder?: (parentFolder: string, name: string) => void
   onUnfavorite?: () => void
   onEdit?: () => void
   forceUnfavorited?: boolean
@@ -110,8 +114,12 @@ export function BarcodesPage({
   }
 
   async function collectFavorite() {
-    const folderPaths = Array.from(new Set(favorites.flatMap((fav) => {
+    const folderPaths = Array.from(new Set([...folders, ...favorites.flatMap((fav) => {
       const parts = (fav.folder || "").split("/").filter(Boolean)
+      return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+    })].flatMap((folder) => {
+      if (!folder) return []
+      const parts = folder.split("/")
       return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
     })))
     async function createFolder(parent: string): Promise<string | null> {
@@ -128,6 +136,7 @@ export function BarcodesPage({
         alert("文件夹名称不能为空")
         return null
       }
+      if (onCreateFolder) onCreateFolder(parent, trimmed)
       return parent ? `${parent}/${trimmed}` : trimmed
     }
     async function chooseFolder(parent: string): Promise<string | null> {
@@ -296,7 +305,9 @@ export function PresentedBarcodes({
   items,
   settings,
   favorites,
+  folders = [],
   onFavorite,
+  onCreateFolder,
   onUnfavorite,
   onEdit,
   showCustomBack = true,
@@ -306,7 +317,9 @@ export function PresentedBarcodes({
   items: BarcodeItem[]
   settings: StyleSettings
   favorites: FavoriteItem[]
+  folders?: string[]
   onFavorite: (name: string, folder: string) => void
+  onCreateFolder?: (parentFolder: string, name: string) => void
   onUnfavorite?: () => void
   onEdit?: () => void
   showCustomBack?: boolean
@@ -325,8 +338,10 @@ export function PresentedBarcodes({
       items={items}
       settings={settings}
       favorites={favorites}
+      folders={folders}
       onClose={dismiss}
       onFavorite={onFavorite}
+      onCreateFolder={onCreateFolder}
       onUnfavorite={onUnfavorite}
       onEdit={onEdit ? handleEdit : undefined}
       showCustomBack={showCustomBack}

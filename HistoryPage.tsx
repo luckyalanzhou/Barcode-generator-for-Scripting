@@ -15,9 +15,11 @@ export function HistoryPage({
   colorScheme,
   settings,
   favorites,
+  folders,
   barcodeType,
   buildItems,
   onFavorite,
+  onCreateFolder,
   onClose,
   onClear,
 }: {
@@ -25,9 +27,11 @@ export function HistoryPage({
   colorScheme: "system" | "light" | "dark"
   settings: StyleSettings
   favorites: FavoriteItem[]
+  folders: string[]
   barcodeType: BarcodeType
   buildItems: (texts: string[], type: BarcodeType) => Promise<BarcodeItem[]>
   onFavorite: (name: string, folder: string) => void
+  onCreateFolder: (parentFolder: string, name: string) => void
   onClose: () => void
   onClear: () => void
 }) {
@@ -59,7 +63,9 @@ export function HistoryPage({
               items={selectedHistory.items}
               settings={settings}
               favorites={favorites}
+              folders={folders}
               onFavorite={onFavorite}
+              onCreateFolder={onCreateFolder}
               showCustomBack={false}
               showFavoriteAction={false}
               showShareAction={false}
