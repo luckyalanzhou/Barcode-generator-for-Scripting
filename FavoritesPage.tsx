@@ -229,6 +229,22 @@ export function FavoritesPage({
       const selected = await chooseMoveFolder(fav.folder || "")
       if (selected === null) return
       if (selected === "__create__") {
+        const folderCandidates = Array.from(new Set([
+          ...folders,
+          ...favorites.map((item) => item.folder || ""),
+        ].flatMap((folder) => {
+          if (!folder) return []
+          const parts = folder.split("/")
+          return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+        }))).sort()
+        const parentChoice = await Dialog.actionSheet({
+          title: "选择新文件夹位置",
+          message: "可选择根目录或已有文件夹",
+          cancelButton: true,
+          actions: [{ label: "根目录" }, ...folderCandidates.map((folder) => ({ label: folder }))],
+        })
+        if (parentChoice === null || parentChoice === undefined) return
+        const parentFolder = parentChoice === 0 ? "" : folderCandidates[parentChoice - 1]
         const newFolder = await Dialog.prompt({
           title: "添加文件夹",
           message: "请输入新的文件夹名称",
@@ -242,7 +258,9 @@ export function FavoritesPage({
           alert("文件夹名称不能为空")
           return
         }
-        onMoveFavorite(fav.id, trimmed)
+        const newFolderPath = parentFolder ? `${parentFolder}/${trimmed}` : trimmed
+        onCreateFolder(parentFolder, trimmed)
+        onMoveFavorite(fav.id, newFolderPath)
       } else {
         onMoveFavorite(fav.id, selected)
       }
