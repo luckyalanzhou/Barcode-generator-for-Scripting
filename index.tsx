@@ -444,21 +444,30 @@ function View() {
   async function importBackup() {
     const paths = await DocumentPicker.pickFiles()
     if (!paths || paths.length === 0) return
+    let extractedPath: string | null = null
     try {
       const path = paths[0]
       if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
       let parsed: InterchangeBackup
-      let extractedPath: string | null = null
       if (path.toLowerCase().endsWith(".zip")) {
         extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${Date.now().toString(36)}`
         FileManager.createDirectorySync(extractedPath, true)
         await FileManager.unzip(path, extractedPath)
-        const entries = FileManager.readDirectorySync(extractedPath, true)
-          .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
-        const manifest = entries.find((entry: string) => entry.endsWith("/barcode-generator-backup.json") || entry.endsWith("barcode-generator-backup.json"))
+        // 安卓备份的清单位于 ZIP 根目录。先按确定路径读取，避免某些
+        // Scripting 版本对 readDirectorySync 返回相对/绝对路径差异的影响。
+        const rootManifest = `${extractedPath}/barcode-generator-backup.json`
+        let manifest: string | undefined = FileManager.isFileSync(rootManifest) ? rootManifest : undefined
+        // 同时兼容由其他工具压缩、带一层外部文件夹的备份包。
+        if (!manifest) {
+          const entries = FileManager.readDirectorySync(extractedPath, true)
+            .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
+          manifest = entries.find((entry: string) =>
+            entry.replace(/\\/g, "/").split("/").pop() === "barcode-generator-backup.json" &&
+            FileManager.isFileSync(entry)
+          )
+        }
         if (!manifest || !FileManager.isFileSync(manifest)) throw new Error("压缩包中没有有效的备份清单")
         parsed = parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, "")))
-        FileManager.removeSync(extractedPath)
       } else {
         const fileData = Data.fromFile(path)
         if (!fileData) throw new Error("无法读取备份文件，请确认文件已下载完成")
@@ -490,6 +499,7 @@ function View() {
     } catch (error) {
       await Dialog.alert({ title: "备份导入失败", message: error instanceof Error ? error.message : String(error) })
     } finally {
+      if (extractedPath && FileManager.existsSync(extractedPath)) FileManager.removeSync(extractedPath)
       if (typeof DocumentPicker.stopAcessingSecurityScopedResources === "function") DocumentPicker.stopAcessingSecurityScopedResources()
     }
   }
