@@ -341,34 +341,7 @@ export function FavoritesPage({
           </Button>
           {folder !== "" ? <Button action={() => showFolderMenu(folder)} modifiers={modifiers().frame({ width: 44, height: 44, alignment: 'center' }).padding(0).font(18).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 16 })}><Image systemName="ellipsis.circle" renderingMode="template" /></Button> : null}
         </HStack>
-        {!isFolderCollapsed(folder) && <>
-          {groupItems.map((fav) => (
-            <HStack
-              key={fav.id}
-              alignment="center"
-              spacing={8}
-              modifiers={modifiers()
-                .frame({ maxWidth: 'infinity', minHeight: 44, alignment: 'center' })
-                .padding({ top: 6, bottom: 6, leading: 8, trailing: 8 })
-                .background({ style: isFavoriteSearchMatch(fav) ? "rgba(250, 204, 21, 0.24)" : cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}
-            >
-              <Button action={() => selectFavorite(fav)} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-                <Text font={16} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme)).frame({ maxWidth: 'infinity', alignment: 'leading' })}>
-                  {fav.name}
-                </Text>
-              </Button>
-              {typeof fav.time === "number" && Number.isFinite(fav.time) && (
-                <Text font={11} modifiers={modifiers().lineLimit(1).foregroundStyle(sub(colorScheme))}>
-                  {formatFavoriteTime(fav.time)}
-                </Text>
-              )}
-              <Button action={() => showFavoriteMenu(fav)} modifiers={modifiers().frame({ width: 36, height: 36, alignment: 'center' }).padding(0).font(17).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}>
-                <Image systemName="ellipsis" renderingMode="template" />
-              </Button>
-            </HStack>
-          ))}
-          {children.map((child) => renderFolder(child, depth + 1))}
-        </>}
+        {!isFolderCollapsed(folder) && <>{groupItems.map((fav) => <HStack key={fav.id} alignment="center" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity', height: 36, alignment: 'center' }).padding({ top: 4, bottom: 4, leading: 8, trailing: 8 }).background({ style: isFavoriteSearchMatch(fav) ? "rgba(250, 204, 21, 0.24)" : cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}><Button action={() => selectFavorite(fav)} modifiers={modifiers().frame({ maxWidth: 'infinity' })}><Text font={16} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme)).frame({ maxWidth: 'infinity', alignment: 'leading' })}>{fav.name}</Text></Button>{typeof fav.time === "number" && Number.isFinite(fav.time) && <Text font={11} modifiers={modifiers().lineLimit(1).foregroundStyle(sub(colorScheme))}>{formatFavoriteTime(fav.time)}</Text>}<Button action={() => showFavoriteMenu(fav)} modifiers={modifiers().frame({ width: 36, height: 36, alignment: 'center' }).padding(0).font(17).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}><Image systemName="ellipsis" renderingMode="template" /></Button></HStack>)}{children.map((child) => renderFolder(child, depth + 1))}</>}
       </VStack>
     )
   }
