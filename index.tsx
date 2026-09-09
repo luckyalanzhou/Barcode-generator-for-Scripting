@@ -46,6 +46,7 @@ import {
 import { HistoryItem, FavoriteItem, InterchangeBackup, createInterchangeBackup, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./storage"
 const HISTORY_KEY = "recent_history"
 const HISTORY_MAX = 20
+const BACKUP_MANIFEST_NAMES = ["barcode-generator-backup.json", "barcode-generator-backup-android.json"]
 type HomeTab = "generate" | "favorites" | "history" | "settings"
 const HOME_TABS: HomeTab[] = ["generate", "favorites", "history", "settings"]
 function makeRowId(): string { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
@@ -453,16 +454,17 @@ function View() {
         extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${Date.now().toString(36)}`
         FileManager.createDirectorySync(extractedPath, true)
         await FileManager.unzip(path, extractedPath)
-        // 安卓备份的清单位于 ZIP 根目录。先按确定路径读取，避免某些
-        // Scripting 版本对 readDirectorySync 返回相对/绝对路径差异的影响。
-        const rootManifest = `${extractedPath}/barcode-generator-backup.json`
-        let manifest: string | undefined = FileManager.isFileSync(rootManifest) ? rootManifest : undefined
+        // 安卓备份的清单位于 ZIP 根目录。不同安卓版本使用两个合法文件名，
+        // 先按确定路径读取，避免某些 Scripting 版本目录返回格式的影响。
+        let manifest: string | undefined = BACKUP_MANIFEST_NAMES
+          .map((name) => `${extractedPath}/${name}`)
+          .find((candidate) => FileManager.isFileSync(candidate))
         // 同时兼容由其他工具压缩、带一层外部文件夹的备份包。
         if (!manifest) {
           const entries = FileManager.readDirectorySync(extractedPath, true)
             .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
           manifest = entries.find((entry: string) =>
-            entry.replace(/\\/g, "/").split("/").pop() === "barcode-generator-backup.json" &&
+            BACKUP_MANIFEST_NAMES.includes(entry.replace(/\\/g, "/").split("/").pop() || "") &&
             FileManager.isFileSync(entry)
           )
         }
