@@ -16,7 +16,7 @@
     "it" : ""
   },
   "name" : "条码生成器",
-  "icon" : "square.2.layers.3d.fill",
+  "icon" : "qrcode",
   "runInApp" : false,
   "contributors" : [
 
