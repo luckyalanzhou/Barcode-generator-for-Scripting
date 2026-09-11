@@ -124,46 +124,21 @@ export function saveFolders(folders: string[]) {
   Storage.set(FOLDERS_KEY, normalized)
   Storage.set(FOLDERS_KEY, normalized, { shared: true })
 }
-export function splitFolder(folder: string): { rootFolder: string; subFolder: string } { const parts = folder.split("/").map((part) => part.trim()).filter(Boolean); return { rootFolder: parts[0] ?? "", subFolder: parts[1] ?? "" } }
 export function joinFolder(rootFolder: string, subFolder: string): string { const root = rootFolder.trim(); const child = subFolder.trim(); if (!root) return ""; return child ? `${root}/${child}` : root }
-export function createInterchangeBackup(favorites: FavoriteItem[], folders: string[]): InterchangeBackup {
-  const folderPaths = Array.from(new Set([...folders, ...favorites.map((favorite) => favorite.folder)]))
-    .map((folder) => folder.trim()).filter(Boolean)
-  const rootNames = Array.from(new Set(folderPaths.map((folder) => splitFolder(folder).rootFolder)))
-  return {
-    format: "BarcodeGeneratorInterchange",
-    version: 1,
-    exportedAt: Date.now(),
-    folders: rootNames.map((name) => ({
-      name,
-      children: Array.from(new Set(folderPaths
-        .filter((folder) => splitFolder(folder).rootFolder === name)
-        .map((folder) => splitFolder(folder).subFolder)
-        .filter(Boolean))),
-    })),
-    favorites: favorites.map((favorite) => {
-      const { rootFolder, subFolder } = splitFolder(favorite.folder)
-      return { id: favorite.id, name: favorite.name, rootFolder, subFolder, folder: joinFolder(rootFolder, subFolder), type: favorite.type ?? "code128", barcodeType: favorite.type ?? "code128", time: favorite.time, texts: favorite.texts }
-    }),
-  }
-}
-
 export function parseInterchangeBackup(value: unknown): InterchangeBackup {
   if (!value || typeof value !== "object") throw new Error("备份文件不是有效的 JSON 对象")
   const envelope = value as any
   if (envelope.format !== "BarcodeGeneratorInterchange") throw new Error("不是 BarcodeGeneratorInterchange 备份文件")
   if (envelope.version !== 1) throw new Error(`不支持的备份版本：${String(envelope.version)}`)
-  // Android exports v1 backups with the actual data serialized in `payload`.
-  // Older scripting backups store folders/favorites directly in the root.
-  let data = envelope
-  if (typeof envelope.payload === "string") {
-    try {
-      data = JSON.parse(envelope.payload)
-    } catch {
-      throw new Error("备份中的 payload 不是有效的 JSON")
-    }
-    if (!data || typeof data !== "object") throw new Error("备份中的 payload 无效")
+  // 仅支持安卓跨平台清单；新版 iOS 备份直接使用文件夹和独立收藏文件。
+  if (typeof envelope.payload !== "string") throw new Error("不再支持旧版整体 JSON 备份")
+  let data: any
+  try {
+    data = JSON.parse(envelope.payload)
+  } catch {
+    throw new Error("备份中的 payload 不是有效的 JSON")
   }
+  if (!data || typeof data !== "object") throw new Error("备份中的 payload 无效")
   if (!Array.isArray(data.folders) || !Array.isArray(data.favorites)) throw new Error("备份缺少 folders 或 favorites")
   const folders = data.folders.map((root: any) => {
     // Android v1 uses a flat string array; the scripting format uses

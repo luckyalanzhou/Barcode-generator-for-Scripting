@@ -484,7 +484,12 @@ function View() {
           )
         }
         if (manifest && FileManager.isFileSync(manifest)) {
-          const restored = fromInterchange(parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, ""))))
+          const manifestData = JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, ""))
+          // 仅保留安卓整体清单兼容；旧 iOS 整体 JSON 没有 payload，不再导入。
+          if (!manifestData || typeof manifestData.payload !== "string") {
+            throw new Error("不再支持旧版整体 JSON 备份，请使用新版文件夹备份")
+          }
+          const restored = fromInterchange(parseInterchangeBackup(manifestData))
           importedFolders = restored.folders
           importedFavorites = restored.favorites
           rootCount = restored.rootCount
@@ -520,16 +525,7 @@ function View() {
           childCount = importedFolders.filter((folder) => folder.split("/").length === 2).length
         }
       } else {
-        const fileData = Data.fromFile(path)
-        if (!fileData) throw new Error("无法读取备份文件，请确认文件已下载完成")
-        const content = fileData.toRawString()
-        if (!content || !content.trim()) throw new Error("备份文件为空")
-        const jsonText = content.trim().replace(/^\uFEFF/, "")
-        const restored = fromInterchange(parseInterchangeBackup(JSON.parse(jsonText)))
-        importedFolders = restored.folders
-        importedFavorites = restored.favorites
-        rootCount = restored.rootCount
-        childCount = restored.childCount
+        throw new Error("仅支持新版文件夹 ZIP 备份或安卓 ZIP 备份")
       }
       // 备份导入是完整恢复：不再逐条询问覆盖，避免对话框中断导致只导入部分数据。
       // 先写入，再更新内存状态，保证退出后重新进入仍是同一份完整备份。
