@@ -43,7 +43,7 @@ import {
   MAX_BARCODE_ITEMS,
   maxTextLength,
 } from "./barcode_core"
-import { HistoryItem, FavoriteItem, InterchangeBackup, createInterchangeBackup, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./storage"
+import { HistoryItem, FavoriteItem, InterchangeBackup, normalizeFavorite, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./storage"
 const HISTORY_KEY = "recent_history"
 const HISTORY_MAX = 20
 const BACKUP_MANIFEST_NAMES = ["barcode-generator-backup.json", "barcode-generator-backup-android.json"]
@@ -415,12 +415,10 @@ function View() {
     let archiveRoot: string | null = null
     let archivePath: string | null = null
     try {
-      const backup = createInterchangeBackup(favorites, folders)
       const stamp = Date.now().toString(36)
       archiveRoot = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}`
       archivePath = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}.zip`
       FileManager.createDirectorySync(`${archiveRoot}/favorites`, true)
-      FileManager.writeAsStringSync(`${archiveRoot}/barcode-generator-backup.json`, JSON.stringify(backup, null, 2))
       for (const folder of folders) FileManager.createDirectorySync(`${archiveRoot}/favorites/${folder}`, true)
       for (const favorite of favorites) {
         const folder = favorite.folder ? `/${favorite.folder}` : ""
@@ -449,7 +447,24 @@ function View() {
     try {
       const path = paths[0]
       if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
-      let parsed: InterchangeBackup
+      let importedFolders: string[]
+      let importedFavorites: FavoriteItem[]
+      let rootCount: number
+      let childCount: number
+      function fromInterchange(parsed: InterchangeBackup) {
+        const folders = interchangeFoldersToPaths(parsed)
+        const favorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
+          id: favorite.id || makeRowId(), name: favorite.name, texts: favorite.texts.slice(),
+          type: favorite.type ?? "code128", time: favorite.time ?? Date.now(),
+          folder: joinFolder(favorite.rootFolder, favorite.subFolder),
+        }))
+        return {
+          folders,
+          favorites,
+          rootCount: parsed.folders.length,
+          childCount: parsed.folders.reduce((total, root) => total + root.children.length, 0),
+        }
+      }
       if (path.toLowerCase().endsWith(".zip")) {
         extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${Date.now().toString(36)}`
         FileManager.createDirectorySync(extractedPath, true)
@@ -468,24 +483,54 @@ function View() {
             FileManager.isFileSync(entry)
           )
         }
-        if (!manifest || !FileManager.isFileSync(manifest)) throw new Error("压缩包中没有有效的备份清单")
-        parsed = parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, "")))
+        if (manifest && FileManager.isFileSync(manifest)) {
+          const restored = fromInterchange(parseInterchangeBackup(JSON.parse(FileManager.readAsStringSync(manifest).trim().replace(/^\uFEFF/, ""))))
+          importedFolders = restored.folders
+          importedFavorites = restored.favorites
+          rootCount = restored.rootCount
+          childCount = restored.childCount
+        } else {
+          // 新版 iOS 备份不再写整体清单：直接根据 favorites/ 下的文件夹和
+          // 单条收藏 JSON 恢复，保留空文件夹和每个收藏文件的独立存储结构。
+          const entries = FileManager.readDirectorySync(extractedPath, true)
+            .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
+          const archiveFolderPath = (entry: string): string => {
+            const normalized = entry.replace(/\\/g, "/")
+            const marker = "/favorites/"
+            const markerIndex = normalized.indexOf(marker)
+            if (markerIndex < 0) return ""
+            const parts = normalized.slice(markerIndex + marker.length).split("/").filter(Boolean)
+            return parts.length <= 2 ? parts.join("/") : ""
+          }
+          const fileFavorites = entries
+            .filter((entry: string) => FileManager.isFileSync(entry) && entry.toLowerCase().endsWith(".json"))
+            .filter((entry: string) => archiveFolderPath(entry.slice(0, entry.lastIndexOf("/"))) !== "" || entry.replace(/\\/g, "/").includes("/favorites/"))
+            .map((entry: string) => {
+              try { return normalizeFavorite(JSON.parse(FileManager.readAsStringSync(entry).trim().replace(/^\uFEFF/, ""))) } catch { return null }
+            })
+            .filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
+          const folderPaths = entries
+            .filter((entry: string) => FileManager.isDirectorySync(entry))
+            .map(archiveFolderPath)
+            .filter(Boolean)
+          importedFavorites = fileFavorites
+          importedFolders = Array.from(new Set([...folderPaths, ...fileFavorites.map((favorite) => favorite.folder).filter(Boolean)]))
+          if (importedFolders.length === 0 && importedFavorites.length === 0) throw new Error("压缩包中没有可导入的收藏文件或文件夹")
+          rootCount = new Set(importedFolders.map((folder) => folder.split("/")[0]).filter(Boolean)).size
+          childCount = importedFolders.filter((folder) => folder.split("/").length === 2).length
+        }
       } else {
         const fileData = Data.fromFile(path)
         if (!fileData) throw new Error("无法读取备份文件，请确认文件已下载完成")
         const content = fileData.toRawString()
         if (!content || !content.trim()) throw new Error("备份文件为空")
         const jsonText = content.trim().replace(/^\uFEFF/, "")
-        parsed = parseInterchangeBackup(JSON.parse(jsonText))
+        const restored = fromInterchange(parseInterchangeBackup(JSON.parse(jsonText)))
+        importedFolders = restored.folders
+        importedFavorites = restored.favorites
+        rootCount = restored.rootCount
+        childCount = restored.childCount
       }
-      const importedFolders = interchangeFoldersToPaths(parsed)
-      const importedFavorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
-        id: favorite.id || makeRowId(), name: favorite.name, texts: favorite.texts.slice(),
-        type: favorite.type ?? "code128", time: favorite.time ?? Date.now(),
-        folder: joinFolder(favorite.rootFolder, favorite.subFolder),
-      }))
-      const rootCount = parsed.folders.length
-      const childCount = parsed.folders.reduce((total, root) => total + root.children.length, 0)
       // 备份导入是完整恢复：不再逐条询问覆盖，避免对话框中断导致只导入部分数据。
       // 先写入，再更新内存状态，保证退出后重新进入仍是同一份完整备份。
       saveFolders(importedFolders)

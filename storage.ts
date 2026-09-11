@@ -27,7 +27,7 @@ function favoriteFilePath(favorite: FavoriteItem): string {
   const folder = favorite.folder ? `/${favorite.folder}` : ""
   return `${FAVORITES_FILES_ROOT}${folder}/${encodeURIComponent(favorite.id)}.json`
 }
-function normalizeFavorite(f: any): FavoriteItem | null {
+export function normalizeFavorite(f: any): FavoriteItem | null {
   if (!f || typeof f !== "object" || typeof f.name !== "string" || !Array.isArray(f.texts) || !f.texts.every((text: any) => typeof text === "string")) return null
   return {
     ...f,
