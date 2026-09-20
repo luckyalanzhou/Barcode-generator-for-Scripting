@@ -427,9 +427,10 @@ export function BarcodeCanvas({
   barColor = "#000000",
   bgColor = "#ffffff",
 }: BarcodeCanvasProps) {
-  // 一维条码完全使用用户设置的模块宽度，不根据屏幕或内容长度自动缩放。
+  // 一维条码完全使用用户设置的宽度调节量，不根据屏幕或内容长度自动缩放。
+  // 用 1 像素作为可扫描基准，使短条码在 0.1 步进下也能产生可见变化。
   const effBarW = directWidth
-    ? barW
+    ? Math.max(1, 1 + barW)
     : Math.max(1, Math.floor(barW * Math.min(1, maxWidth / (bits.length * barW + quiet * 2))))
   const width = bits.length * effBarW + quiet * 2
 

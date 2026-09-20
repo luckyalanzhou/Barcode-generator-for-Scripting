@@ -260,7 +260,7 @@ export function BarcodesPage({
               <VStack alignment="center" spacing={6}>
                 {item.type === "qr"
                   ? renderItemContent(item, Math.min(Device.screen.width - 40, 300))
-                  : <HStack alignment="center" modifiers={modifiers().frame({ alignment: "center" })}>
+                  : <HStack alignment="center" modifiers={modifiers().frame({ maxWidth: "infinity", alignment: "center" })}>
                       {renderItemContent(item)}
                     </HStack>}
                 {renderText(item)}
