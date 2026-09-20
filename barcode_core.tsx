@@ -427,11 +427,10 @@ export function BarcodeCanvas({
   barColor = "#000000",
   bgColor = "#ffffff",
 }: BarcodeCanvasProps) {
-  // Code 128-B 直接使用设置值，最小保持 1 像素以避免条纹模糊。
-  // 超长条码由结果页的横向 ScrollView 展示，避免压缩后影响扫描。
-  // 其他一维码保留原有的屏幕宽度适配逻辑。
-  const scale = Math.min(1, maxWidth / (bits.length * barW + quiet * 2))
-  const effBarW = directWidth ? Math.max(1, Math.round(barW)) : Math.max(1, Math.floor(barW * scale))
+  // 一维条码完全使用用户设置的模块宽度，不根据屏幕或内容长度自动缩放。
+  const effBarW = directWidth
+    ? barW
+    : Math.max(1, Math.floor(barW * Math.min(1, maxWidth / (bits.length * barW + quiet * 2))))
   const width = bits.length * effBarW + quiet * 2
 
   return (

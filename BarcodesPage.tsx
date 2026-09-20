@@ -96,7 +96,7 @@ export function BarcodesPage({
         bits={item.bits}
         barW={settings.barWidth}
         barH={settings.barHeight}
-        directWidth={item.type === "code128"}
+        directWidth={item.type !== "qr"}
         quiet={10}
         barColor="#000000"
         bgColor="#ffffff"
@@ -258,13 +258,11 @@ export function BarcodesPage({
           >
             {items.map((item) => (
               <VStack alignment="center" spacing={6}>
-                {item.type !== "code128" ? renderItemContent(item, Math.min(Device.screen.width - 40, 300)) : (
-                  <ScrollView axes="horizontal" scrollIndicator="automatic">
-                    <HStack alignment="center" modifiers={modifiers().padding({ leading: 4, trailing: 4 })}>
+                {item.type === "qr"
+                  ? renderItemContent(item, Math.min(Device.screen.width - 40, 300))
+                  : <HStack alignment="center" modifiers={modifiers().frame({ alignment: "center" })}>
                       {renderItemContent(item)}
-                    </HStack>
-                  </ScrollView>
-                )}
+                    </HStack>}
                 {renderText(item)}
                 {itemOk(item) && settings.showFormat && (
                   <Text

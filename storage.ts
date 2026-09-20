@@ -179,7 +179,7 @@ export function loadSettings(): StyleSettings {
   return {
     textSize: typeof saved.textSize === "number" ? saved.textSize : DEFAULT_STYLE.textSize,
     barHeight: typeof saved.barHeight === "number" ? saved.barHeight : DEFAULT_STYLE.barHeight,
-    barWidth: typeof saved.barWidth === "number" ? Math.min(8, Math.max(1, Math.round(saved.barWidth))) : DEFAULT_STYLE.barWidth,
+    barWidth: typeof saved.barWidth === "number" ? Math.min(8, Math.max(0.5, Math.round(saved.barWidth * 10) / 10)) : DEFAULT_STYLE.barWidth,
     margin: typeof saved.margin === "number" ? saved.margin : DEFAULT_STYLE.margin,
     showFormat: typeof saved.showFormat === "boolean" ? saved.showFormat : DEFAULT_STYLE.showFormat,
     colorScheme: saved.colorScheme === "system" || saved.colorScheme === "light" || saved.colorScheme === "dark" ? saved.colorScheme : DEFAULT_STYLE.colorScheme,
