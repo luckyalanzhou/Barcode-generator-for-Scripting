@@ -449,8 +449,6 @@ function View() {
       if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
       let importedFolders: string[]
       let importedFavorites: FavoriteItem[]
-      let rootCount: number
-      let childCount: number
       function fromInterchange(parsed: InterchangeBackup) {
         const folders = interchangeFoldersToPaths(parsed)
         const favorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
@@ -492,8 +490,6 @@ function View() {
           const restored = fromInterchange(parseInterchangeBackup(manifestData))
           importedFolders = restored.folders
           importedFavorites = restored.favorites
-          rootCount = restored.rootCount
-          childCount = restored.childCount
         } else {
           // 新版 iOS 备份不再写整体清单：直接根据 favorites/ 下的文件夹和
           // 单条收藏 JSON 恢复，保留空文件夹和每个收藏文件的独立存储结构。
@@ -521,24 +517,64 @@ function View() {
           importedFavorites = fileFavorites
           importedFolders = Array.from(new Set([...folderPaths, ...fileFavorites.map((favorite) => favorite.folder).filter(Boolean)]))
           if (importedFolders.length === 0 && importedFavorites.length === 0) throw new Error("压缩包中没有可导入的收藏文件或文件夹")
-          rootCount = new Set(importedFolders.map((folder) => folder.split("/")[0]).filter(Boolean)).size
-          childCount = importedFolders.filter((folder) => folder.split("/").length === 2).length
         }
       } else {
         throw new Error("仅支持新版文件夹 ZIP 备份或安卓 ZIP 备份")
       }
-      // 备份导入是完整恢复：不再逐条询问覆盖，避免对话框中断导致只导入部分数据。
-      // 先写入，再更新内存状态，保证退出后重新进入仍是同一份完整备份。
-      saveFolders(importedFolders)
-      saveFavorites(importedFavorites)
+      // 导入采用合并策略：保留当前收藏和文件夹；同条码格式下同名收藏统一询问是否覆盖。
+      // 覆盖时沿用当前收藏的 id，避免旧的独立收藏文件残留或发生 id 冲突。
+      const mergedFolders = Array.from(new Set([...folders, ...importedFolders]))
+      const mergedFavorites = [...favorites]
+      let addedCount = 0
+      let overwrittenCount = 0
+      let skippedCount = 0
+      const duplicateNames = Array.from(new Set(importedFavorites
+        .filter((imported) => mergedFavorites.some((existing) =>
+          existing.name === imported.name &&
+          (existing.type ?? "code128") === (imported.type ?? "code128")
+        ))
+        .map((imported) => imported.name)))
+      let overwriteDuplicates = false
+      if (duplicateNames.length > 0) {
+        const choice = await Dialog.actionSheet({
+          title: "发现重复收藏",
+          message: `备份中有 ${duplicateNames.length} 个收藏名称与当前数据重复，是否全部覆盖？`,
+          cancelButton: true,
+          actions: [{ label: "全部覆盖", destructive: true }],
+        })
+        overwriteDuplicates = choice === 0
+      }
+      for (const imported of importedFavorites) {
+        const sameNameIndex = mergedFavorites.findIndex((existing) =>
+          existing.name === imported.name &&
+          (existing.type ?? "code128") === (imported.type ?? "code128")
+        )
+        if (sameNameIndex >= 0) {
+          const existing = mergedFavorites[sameNameIndex]
+          if (!overwriteDuplicates) {
+            skippedCount++
+            continue
+          }
+          mergedFavorites[sameNameIndex] = { ...imported, id: existing.id }
+          overwrittenCount++
+          continue
+        }
+
+        // 备份中的 id 可能与本机另一条收藏冲突；此时生成新 id，避免覆盖错误文件。
+        const idConflict = mergedFavorites.some((existing) => existing.id === imported.id)
+        mergedFavorites.push(idConflict ? { ...imported, id: makeRowId() } : imported)
+        addedCount++
+      }
+      saveFolders(mergedFolders)
+      saveFavorites(mergedFavorites)
       const savedFolders = loadFolders()
       const savedFavorites = loadFavorites()
-      if (savedFolders.length < importedFolders.length || savedFavorites.length !== importedFavorites.length) {
+      if (savedFolders.length < mergedFolders.length || savedFavorites.length !== mergedFavorites.length) {
         throw new Error(`备份保存校验失败：文件夹 ${savedFolders.length} 条，收藏 ${savedFavorites.length} 条`)
       }
       setFolders(savedFolders)
       setFavorites(savedFavorites)
-      await alert(`备份导入完成：${rootCount} 个一级文件夹、${childCount} 个二级文件夹、${savedFavorites.length} 条收藏`)
+      await alert(`备份合并完成：新增 ${addedCount} 条，覆盖 ${overwrittenCount} 条，跳过 ${skippedCount} 条；当前共 ${savedFavorites.length} 条收藏`)
     } catch (error) {
       await Dialog.alert({ title: "备份导入失败", message: error instanceof Error ? error.message : String(error) })
     } finally {
