@@ -205,8 +205,8 @@ export function SettingsPage({
         <SliderRow
           title="条码宽度"
           value={settings.barWidth}
-           min={0.5}
-           max={8}
+           min={0}
+           max={4}
            step={0.1}
           onValue={(v) => onChange({ barWidth: v })}
           cs={colorScheme}
