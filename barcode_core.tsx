@@ -412,6 +412,7 @@ export interface BarcodeCanvasProps {
   barH?: number
   quiet?: number
   maxWidth?: number
+  directWidth?: boolean
   barColor?: string
   bgColor?: string
 }
@@ -422,13 +423,15 @@ export function BarcodeCanvas({
   barH = 80,
   quiet = 10,
   maxWidth = 330,
+  directWidth = false,
   barColor = "#000000",
   bgColor = "#ffffff",
 }: BarcodeCanvasProps) {
-  // 内容过长时按比例缩小，静区也计入总宽度
+  // Code 128-B 直接使用设置值，最小保持 1 像素以避免条纹模糊。
+  // 超长条码由结果页的横向 ScrollView 展示，避免压缩后影响扫描。
+  // 其他一维码保留原有的屏幕宽度适配逻辑。
   const scale = Math.min(1, maxWidth / (bits.length * barW + quiet * 2))
-  // 保持整数像素模块，避免小数宽度导致抗锯齿；宁可超出 maxWidth 也不牺牲可扫描性。
-  const effBarW = Math.max(1, Math.floor(barW * scale))
+  const effBarW = directWidth ? Math.max(1, Math.round(barW)) : Math.max(1, Math.floor(barW * scale))
   const width = bits.length * effBarW + quiet * 2
 
   return (

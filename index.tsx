@@ -536,13 +536,12 @@ function View() {
         .map((imported) => imported.name)))
       let overwriteDuplicates = false
       if (duplicateNames.length > 0) {
-        const choice = await Dialog.actionSheet({
+        overwriteDuplicates = await Dialog.confirm({
           title: "发现重复收藏",
           message: `备份中有 ${duplicateNames.length} 个收藏名称与当前数据重复，是否全部覆盖？`,
-          cancelButton: true,
-          actions: [{ label: "全部覆盖", destructive: true }],
+          cancelLabel: "取消",
+          confirmLabel: "全部覆盖",
         })
-        overwriteDuplicates = choice === 0
       }
       for (const imported of importedFavorites) {
         const sameNameIndex = mergedFavorites.findIndex((existing) =>
