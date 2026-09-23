@@ -96,7 +96,7 @@ export function BarcodesPage({
         bits={item.bits}
         barW={settings.barWidth}
         barH={settings.barHeight}
-        directWidth={item.type !== "qr"}
+        maxWidth={Math.max(160, Device.screen.width - 40)}
         quiet={10}
         barColor="#000000"
         bgColor="#ffffff"

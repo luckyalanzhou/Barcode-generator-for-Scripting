@@ -1,7 +1,7 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Image, modifiers, RoundedRectangle, Toggle, Picker, Slider } from "scripting"
 import { StyleSettings } from "./barcode_core"
 import { CS, schemeProps, lab, sub, cardB, FullScreenBg } from "./theme"
-// 设置页：样式设置（文字大小/条码高度/条码宽度/边距/显示条码格式）
+// 设置页：样式设置（文字大小/条码高度/条码整体宽度/条码间距/显示条码格式）
 
 // 数值调节行：右侧滑杆调节（min/max 约束），最右侧固定显示当前值与单位
 function SliderRow({

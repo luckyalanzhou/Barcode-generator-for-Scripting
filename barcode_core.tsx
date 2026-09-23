@@ -67,7 +67,7 @@ export function typeName(type: BarcodeType): string {
 }
 
 // ============ 样式设置 ============
-// 文字大小 / 条码高度 / 条码宽度（模块宽） / 边距（静区） / 显示条码格式 / 外观（跟随系统/浅色/深色）
+// 文字大小 / 条码高度 / 条码整体宽度 / 条码间距 / 显示条码格式 / 外观（跟随系统/浅色/深色）
 export interface StyleSettings {
   textSize: number
   barHeight: number
@@ -412,7 +412,6 @@ export interface BarcodeCanvasProps {
   barH?: number
   quiet?: number
   maxWidth?: number
-  directWidth?: boolean
   barColor?: string
   bgColor?: string
 }
@@ -423,16 +422,15 @@ export function BarcodeCanvas({
   barH = 80,
   quiet = 10,
   maxWidth = 330,
-  directWidth = false,
   barColor = "#000000",
   bgColor = "#ffffff",
 }: BarcodeCanvasProps) {
-  // 一维条码完全使用用户设置的宽度调节量，不根据屏幕或内容长度自动缩放。
-  // 用 1 像素作为可扫描基准，使短条码在 0.1 步进下也能产生可见变化。
-  const effBarW = directWidth
-    ? Math.max(1, 1 + barW)
-    : Math.max(1, Math.floor(barW * Math.min(1, maxWidth / (bits.length * barW + quiet * 2))))
-  const width = bits.length * effBarW + quiet * 2
+  // All one-dimensional symbols share one overall width. The width control
+  // selects 160 pt through the available screen width; module width is fitted
+  // to each encoded value so short and long values have matching outer edges.
+  const targetWidth = Math.min(maxWidth, 160 + (maxWidth - 160) * (Math.min(4, Math.max(0, barW)) / 4))
+  const effBarW = (targetWidth - quiet * 2) / bits.length
+  const width = targetWidth
 
   return (
     <Canvas
