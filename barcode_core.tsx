@@ -1,5 +1,5 @@
 // barcode_core.tsx — 多种一维条码共享逻辑（index.tsx 使用）
-import { Canvas, modifiers } from "scripting"
+import { Canvas, Device, modifiers } from "scripting"
 
 // 共享扫描函数：第一页扫描按钮使用。
 // 相机扫描文字：打开相机取景，对准文字自动识别，返回识别出的文字数组（每项一行）；取消时返回 null。
@@ -410,27 +410,61 @@ export interface BarcodeCanvasProps {
   bits: number[]
   barW?: number
   barH?: number
-  quiet?: number
+  quietModules?: number
   maxWidth?: number
   barColor?: string
   bgColor?: string
+}
+
+export interface BarcodeLayout {
+  width: number
+  pixelScale: number
+  modulePixels: number
+  quietModules: number
+}
+
+// External scanners are sensitive to antialiased bar edges. Keep the selected
+// overall width, but calculate every boundary in physical pixels so Canvas can
+// draw solid black/white transitions. Quiet zones are measured in modules as
+// required by one-dimensional barcode specifications.
+export function barcodeLayout(
+  bitsLength: number,
+  barW: number,
+  maxWidth: number,
+  quietModules = 10,
+): BarcodeLayout {
+  const clampedWidth = Math.min(4, Math.max(0, barW))
+  const targetWidth = Math.min(maxWidth, 160 + (maxWidth - 160) * (clampedWidth / 4))
+  const pixelScale = Math.max(1, Device.screen.scale || 1)
+  const widthPixels = Math.max(1, Math.round(targetWidth * pixelScale))
+  const totalModules = Math.max(1, bitsLength + quietModules * 2)
+  return {
+    width: widthPixels / pixelScale,
+    pixelScale,
+    modulePixels: widthPixels / totalModules,
+    quietModules,
+  }
+}
+
+export function isBarcodeScanDense(
+  bitsLength: number,
+  barW: number,
+  maxWidth: number,
+): boolean {
+  return barcodeLayout(bitsLength, barW, maxWidth).modulePixels < 2
 }
 
 export function BarcodeCanvas({
   bits,
   barW = 2,
   barH = 80,
-  quiet = 10,
+  quietModules = 10,
   maxWidth = 330,
   barColor = "#000000",
   bgColor = "#ffffff",
 }: BarcodeCanvasProps) {
-  // All one-dimensional symbols share one overall width. The width control
-  // selects 160 pt through the available screen width; module width is fitted
-  // to each encoded value so short and long values have matching outer edges.
-  const targetWidth = Math.min(maxWidth, 160 + (maxWidth - 160) * (Math.min(4, Math.max(0, barW)) / 4))
-  const effBarW = (targetWidth - quiet * 2) / bits.length
-  const width = targetWidth
+  const layout = barcodeLayout(bits.length, barW, maxWidth, quietModules)
+  const { width, pixelScale, modulePixels } = layout
 
   return (
     <Canvas
@@ -439,9 +473,19 @@ export function BarcodeCanvas({
         ctx.fillStyle = bgColor
         ctx.fillRect(0, 0, width, barH)
         ctx.fillStyle = barColor
-        for (let i = 0; i <= bits.length; i++) {
-          if (bits[i] === 1) {
-            ctx.fillRect(quiet + i * effBarW, 0, effBarW, barH)
+        // Draw a whole black run at once. Rounding both run boundaries to the
+        // physical-pixel grid prevents gray antialiasing seams between modules.
+        for (let i = 0; i < bits.length;) {
+          if (bits[i] !== 1) {
+            i += 1
+            continue
+          }
+          const runStart = i
+          while (i < bits.length && bits[i] === 1) i += 1
+          const startPixel = Math.round((quietModules + runStart) * modulePixels)
+          const endPixel = Math.round((quietModules + i) * modulePixels)
+          if (endPixel > startPixel) {
+            ctx.fillRect(startPixel / pixelScale, 0, (endPixel - startPixel) / pixelScale, barH)
           }
         }
       }}

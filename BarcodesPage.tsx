@@ -1,5 +1,5 @@
 import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, ZStack, modifiers, ImageRenderer, useState } from "scripting"
-import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings } from "./barcode_core"
+import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings, isBarcodeScanDense } from "./barcode_core"
 import { FavoriteItem } from "./storage"
 import { HistoryItem } from "./storage"
 declare const Dialog: any
@@ -97,10 +97,21 @@ export function BarcodesPage({
         barW={settings.barWidth}
         barH={settings.barHeight}
         maxWidth={Math.max(160, Device.screen.width - 40)}
-        quiet={10}
+        quietModules={10}
         barColor="#000000"
         bgColor="#ffffff"
       />
+    )
+  }
+
+  function renderScanDensityHint(item: BarcodeItem) {
+    if (item.type === "qr" || item.bits === null) return null
+    const maxWidth = Math.max(160, Device.screen.width - 40)
+    if (!isBarcodeScanDense(item.bits.length, settings.barWidth, maxWidth)) return null
+    return (
+      <Text font={11} modifiers={modifiers().foregroundStyle("#D97706")}>
+        条码较密，建议调高条码宽度或缩短内容后再扫描
+      </Text>
     )
   }
 
@@ -198,6 +209,7 @@ export function BarcodesPage({
             <VStack alignment="center" spacing={6}>
               {renderItemContent(item)}
               {renderText(item, "#111111")}
+              {renderScanDensityHint(item)}
             </VStack>
           ))}
         </VStack>
@@ -264,6 +276,7 @@ export function BarcodesPage({
                       {renderItemContent(item)}
                     </HStack>}
                 {renderText(item)}
+                {renderScanDensityHint(item)}
                 {itemOk(item) && settings.showFormat && (
                   <Text
                     font={12}
