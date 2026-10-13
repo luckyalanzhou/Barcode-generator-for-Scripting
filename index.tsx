@@ -932,9 +932,9 @@ function View() {
               <HStack
                 alignment="center"
                 spacing={0}
+                padding={{ top: 2, bottom: 8, leading: 4, trailing: 4 }}
                 modifiers={modifiers()
-                  .frame({ maxWidth: "infinity", height: 58, alignment: "center" })
-                  .padding({ leading: 8, trailing: 8 })
+                  .frame({ maxWidth: "infinity", alignment: "center" })
                   .background({ style: "regularMaterial" })}
               >
                 {HOME_TABS.map((tab) => {
@@ -946,6 +946,13 @@ function View() {
                       key={`home-tab-${tab}`}
                       action={() => selectHomeTab(tab)}
                       buttonStyle="plain"
+                      containerRelativeFrame={{
+                        axes: "horizontal",
+                        count: 4,
+                        span: 1,
+                        spacing: 0,
+                        alignment: "center",
+                      }}
                       contextMenu={tab === "generate" ? {
                         menuItems: (
                           <Group>
@@ -967,13 +974,13 @@ function View() {
                         ),
                       } : undefined}
                       modifiers={modifiers()
-                        .frame({ maxWidth: "infinity", height: 54, alignment: "center" })
+                        .frame({ height: 60, alignment: "center" })
                         .padding(0)
                         .contentShape({ type: "rect", cornerRadius: 10 })}
                     >
-                      <VStack alignment="center" spacing={2} modifiers={modifiers().frame({ maxWidth: "infinity", height: 52, alignment: "center" })}>
-                        <Image systemName={icon} renderingMode="template" modifiers={modifiers().font(19).foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))} />
-                        <Text font={10} fontWeight={selected ? "semibold" : "regular"} modifiers={modifiers().foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))}>{title}</Text>
+                      <VStack alignment="center" spacing={3} modifiers={modifiers().frame({ maxWidth: "infinity", height: 58, alignment: "center" })}>
+                        <Image systemName={icon} renderingMode="template" imageScale="large" modifiers={modifiers().font(23).foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))} />
+                        <Text font={11} fontWeight={selected ? "semibold" : "regular"} modifiers={modifiers().foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))}>{title}</Text>
                       </VStack>
                     </Button>
                   )
