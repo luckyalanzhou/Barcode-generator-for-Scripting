@@ -21,3 +21,7 @@ https://github.com/luckyalanzhou/Barcode-generator-for-Scripting
 - 直接打开脚本：生成、收藏和管理条码。
 - 长按底部标签：快速扫描填充、导入导出备份或清空历史。
 - 添加 Scripting 桌面小组件并选择本脚本：在 iOS 主屏幕显示收藏条码。
+
+## Scripting 桌面开发
+
+需要 Node.js 20+ 和 pnpm。安装依赖后，如需通过电脑编辑并实时同步此脚本，可运行 `pnpm scripting:dev` 启动本地开发服务，再由 Scripting 应用连接工作区。脚本仍由 Scripting 应用负责转换和运行。

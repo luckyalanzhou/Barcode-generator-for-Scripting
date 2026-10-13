@@ -1,4 +1,4 @@
-import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, modifiers, useState } from "scripting"
+import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Group, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
 import { FavoriteItem } from "./storage"
 declare const Dialog: any
@@ -15,7 +15,7 @@ function formatFavoriteTime(time: number | undefined): string {
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate() ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`
 }
 
-// 收藏页：底部「收藏」Tab 打开，展示收藏列表（搜索 + 文件夹分组）；点击名称进入条码页，右侧垃圾桶删除
+// 收藏页：支持搜索与文件夹分组；点按收藏名称打开条码，长按文件夹或收藏名称打开原生管理菜单。
 export function FavoritesPage({
   favorites,
   colorScheme,
@@ -134,21 +134,6 @@ export function FavoritesPage({
     onMoveFolder(folder, candidates[choice] === "根目录" ? "" : candidates[choice])
   }
 
-  async function showFolderMenu(folder: string) {
-    const isPrimary = folder.split("/").length === 1
-    const choice = await Dialog.actionSheet({
-      title: folder || "未分类",
-      cancelButton: true,
-      actions: isPrimary
-        ? [{ label: "新建文件夹" }, { label: "重命名" }, { label: "删除文件夹", destructive: true }]
-        : [{ label: "重命名" }, { label: "删除文件夹", destructive: true }],
-    })
-    if (choice === null || choice === undefined) return
-    if (isPrimary && choice === 0) await createSubfolder(folder)
-    else if ((isPrimary ? choice === 1 : choice === 0) && folder) await editFolder(folder)
-    else if ((isPrimary ? choice === 2 : choice === 1) && folder) await deleteFolder(folder)
-  }
-
   // 编辑收藏名称
   async function editFavoriteName(fav: FavoriteItem) {
     const newName = await Dialog.prompt({
@@ -207,70 +192,55 @@ export function FavoritesPage({
     return chooseLevel("")
   }
 
-  async function showFavoriteMenu(fav: FavoriteItem) {
-    const choice = await Dialog.actionSheet({
-      title: fav.name,
-      cancelButton: true,
-      actions: [
-        { label: "编辑" },
-        { label: "移动文件夹" },
-        { label: "删除", destructive: true },
-      ],
-    })
-    if (choice === 0) {
-      await editFavoriteName(fav)
-      return
-    }
-    if (choice === 1) {
-      const selected = await chooseMoveFolder(fav.folder || "")
-      if (selected === null) return
-      if (selected === "__create__") {
-        const folderCandidates = Array.from(new Set([
-          ...folders,
-          ...favorites.map((item) => item.folder || ""),
-        ].flatMap((folder) => {
-          if (!folder) return []
-          const parts = folder.split("/")
-          return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
-        }))).sort()
-        const parentChoice = await Dialog.actionSheet({
-          title: "选择新文件夹位置",
-          message: "可选择根目录或已有文件夹",
-          cancelButton: true,
-          actions: [{ label: "根目录" }, ...folderCandidates.map((folder) => ({ label: folder }))],
-        })
-        if (parentChoice === null || parentChoice === undefined) return
-        const parentFolder = parentChoice === 0 ? "" : folderCandidates[parentChoice - 1]
-        const newFolder = await Dialog.prompt({
-          title: "添加文件夹",
-          message: "请输入新的文件夹名称",
-          placeholder: "文件夹名称",
-          confirmLabel: "保存",
-          cancelLabel: "取消",
-        })
-        if (newFolder === null) return
-        const trimmed = newFolder.trim().replace(/[\\/]+/g, "")
-        if (trimmed.length === 0) {
-          alert("文件夹名称不能为空")
-          return
-        }
-        const newFolderPath = parentFolder ? `${parentFolder}/${trimmed}` : trimmed
-        onCreateFolder(parentFolder, trimmed)
-        onMoveFavorite(fav.id, newFolderPath)
-      } else {
-        onMoveFavorite(fav.id, selected)
-      }
-      return
-    }
-    if (choice === 2) {
-      const confirm = await Dialog.actionSheet({
-        title: "删除收藏",
-        message: `确定删除「${fav.name}」吗？`,
+  async function moveFavoriteToFolder(fav: FavoriteItem) {
+    const selected = await chooseMoveFolder(fav.folder || "")
+    if (selected === null) return
+    if (selected === "__create__") {
+      const folderCandidates = Array.from(new Set([
+        ...folders,
+        ...favorites.map((item) => item.folder || ""),
+      ].flatMap((folder) => {
+        if (!folder) return []
+        const parts = folder.split("/")
+        return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+      }))).sort()
+      const parentChoice = await Dialog.actionSheet({
+        title: "选择新文件夹位置",
+        message: "可选择根目录或已有文件夹",
         cancelButton: true,
-        actions: [{ label: "删除", destructive: true }],
+        actions: [{ label: "根目录" }, ...folderCandidates.map((folder) => ({ label: folder }))],
       })
-      if (confirm === 0) onRemove(fav.id)
+      if (parentChoice === null || parentChoice === undefined) return
+      const parentFolder = parentChoice === 0 ? "" : folderCandidates[parentChoice - 1]
+      const newFolder = await Dialog.prompt({
+        title: "添加文件夹",
+        message: "请输入新的文件夹名称",
+        placeholder: "文件夹名称",
+        confirmLabel: "保存",
+        cancelLabel: "取消",
+      })
+      if (newFolder === null) return
+      const trimmed = newFolder.trim().replace(/[\\/]+/g, "")
+      if (trimmed.length === 0) {
+        alert("文件夹名称不能为空")
+        return
+      }
+      const newFolderPath = parentFolder ? `${parentFolder}/${trimmed}` : trimmed
+      onCreateFolder(parentFolder, trimmed)
+      onMoveFavorite(fav.id, newFolderPath)
+    } else {
+      onMoveFavorite(fav.id, selected)
     }
+  }
+
+  async function deleteFavorite(fav: FavoriteItem) {
+    const confirm = await Dialog.actionSheet({
+      title: "删除收藏",
+      message: `确定删除「${fav.name}」吗？`,
+      cancelButton: true,
+      actions: [{ label: "删除", destructive: true }],
+    })
+    if (confirm === 0) onRemove(fav.id)
   }
 
 
@@ -332,12 +302,36 @@ export function FavoritesPage({
     return (
       <VStack key={folder || "__uncategorized"} alignment="center" spacing={6} modifiers={modifiers().padding({ leading: depth * 14 })}>
         <HStack alignment="center" spacing={depth === 0 ? 8 : 6} modifiers={modifiers().frame({ maxWidth: 'infinity', height: depth === 0 ? 52 : 44, alignment: 'center' }).padding(2).background({ style: isFolderSearchMatch(folder) ? "rgba(250, 204, 21, 0.20)" : "clear", shape: { type: "rect", cornerRadius: 12 } })}>
-          <Button action={() => toggleFolder(folder)} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
+          <Button
+            action={() => toggleFolder(folder)}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  {folder.split("/").length === 1 && <Button title="新建文件夹" systemImage="folder.badge.plus" action={() => { void createSubfolder(folder) }} />}
+                  <Button title={folder ? "重命名" : "归入文件夹"} systemImage="pencil" action={() => { void editFolder(folder) }} />
+                  {folder !== "" && <Button title="移动文件夹" systemImage="folder" action={() => { void moveFolder(folder) }} />}
+                  {folder !== "" && <Button title="删除文件夹" systemImage="trash" role="destructive" action={() => { void deleteFolder(folder) }} />}
+                </Group>
+              ),
+            }}
+            modifiers={modifiers().frame({ maxWidth: 'infinity' })}
+          >
             <HStack alignment="center" spacing={depth === 0 ? 8 : 6}><Image systemName={folder === "" ? "folder" : "folder.fill"} renderingMode="template" modifiers={modifiers().font(depth === 0 ? 20 : 18).foregroundStyle(sub(colorScheme))} /><Text font={depth === 0 ? 16 : 14} fontWeight="semibold" modifiers={modifiers().foregroundStyle(depth === 0 ? "#3b82f6" : "#8b5cf6")}>{displayName}</Text><Spacer /><Text font={12} modifiers={modifiers().foregroundStyle(sub(colorScheme))}>{depth === 0 ? (groupItems.length > 0 ? `${groupItems.length}项${children.length > 0 ? ` · ${children.length}个文件夹` : ""}` : children.length > 0 ? `${children.length}个文件夹` : "") : `${groupItems.length}项`}</Text><Image systemName={isFolderCollapsed(folder) ? "chevron.right" : "chevron.down"} renderingMode="template" modifiers={modifiers().font(depth === 0 ? 20 : 18).foregroundStyle(ter(colorScheme))} /></HStack>
           </Button>
-          {folder !== "" ? <Button action={() => showFolderMenu(folder)} modifiers={modifiers().frame({ width: 44, height: 44, alignment: 'center' }).padding(0).font(18).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 16 })}><Image systemName="ellipsis.circle" renderingMode="template" /></Button> : null}
         </HStack>
-        {!isFolderCollapsed(folder) && <>{groupItems.map((fav) => <HStack key={fav.id} alignment="center" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity', height: 36, alignment: 'center' }).padding({ top: 4, bottom: 4, leading: 8, trailing: 8 }).background({ style: isFavoriteSearchMatch(fav) ? "rgba(250, 204, 21, 0.24)" : cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}><Button action={() => selectFavorite(fav)} modifiers={modifiers().frame({ maxWidth: 'infinity' })}><Text font={16} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme)).frame({ maxWidth: 'infinity', alignment: 'leading' })}>{fav.name}</Text></Button>{typeof fav.time === "number" && Number.isFinite(fav.time) && <Text font={11} modifiers={modifiers().lineLimit(1).foregroundStyle(sub(colorScheme))}>{formatFavoriteTime(fav.time)}</Text>}<Button action={() => showFavoriteMenu(fav)} modifiers={modifiers().frame({ width: 36, height: 36, alignment: 'center' }).padding(0).font(17).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}><Image systemName="ellipsis" renderingMode="template" /></Button></HStack>)}{children.map((child) => renderFolder(child, depth + 1))}</>}
+        {!isFolderCollapsed(folder) && <>{groupItems.map((fav) => <HStack key={fav.id} alignment="center" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity', height: 36, alignment: 'center' }).padding({ top: 4, bottom: 4, leading: 8, trailing: 8 }).background({ style: isFavoriteSearchMatch(fav) ? "rgba(250, 204, 21, 0.24)" : cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}><Button
+          action={() => { void selectFavorite(fav) }}
+          contextMenu={{
+            menuItems: (
+              <Group>
+                <Button title="重命名" systemImage="pencil" action={() => { void editFavoriteName(fav) }} />
+                <Button title="移动到文件夹" systemImage="folder" action={() => { void moveFavoriteToFolder(fav) }} />
+                <Button title="删除" systemImage="trash" role="destructive" action={() => { void deleteFavorite(fav) }} />
+              </Group>
+            ),
+          }}
+          modifiers={modifiers().frame({ maxWidth: 'infinity' })}
+        ><Text font={16} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme)).frame({ maxWidth: 'infinity', alignment: 'leading' })}>{fav.name}</Text></Button>{typeof fav.time === "number" && Number.isFinite(fav.time) && <Text font={11} modifiers={modifiers().lineLimit(1).foregroundStyle(sub(colorScheme))}>{formatFavoriteTime(fav.time)}</Text>}</HStack>)}{children.map((child) => renderFolder(child, depth + 1))}</>}
       </VStack>
     )
   }

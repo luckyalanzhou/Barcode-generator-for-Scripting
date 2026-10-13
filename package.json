@@ -1,0 +1,10 @@
+{
+  "name": "barcode-generator-for-scripting",
+  "private": true,
+  "scripts": {
+    "scripting:dev": "scripting-cli start"
+  },
+  "devDependencies": {
+    "scripting-cli": "^1.5.0"
+  }
+}
