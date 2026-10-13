@@ -804,7 +804,6 @@ function View() {
             <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
               <TabView
                 selection={tabSelection}
-                tabBarVisibility="hidden"
                 modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}
                 onDragGesture={{
                   minDistance: 20,
@@ -813,6 +812,7 @@ function View() {
                 }}
               >
               <Tab title="生成" systemImage="barcode.viewfinder" value="generate">
+            <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
             <FullScreenBg cs={colorScheme}>
               <VStack
                 spacing={0}
@@ -884,8 +884,10 @@ function View() {
                 </ScrollView>
                </VStack>
             </FullScreenBg>
+            </VStack>
               </Tab>
               <Tab title="收藏" systemImage="heart" value="favorites">
+                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <FavoritesPage
                   favorites={favorites}
                   colorScheme={settings.colorScheme}
@@ -904,8 +906,10 @@ function View() {
                   onMoveFavorite={moveFavorite}
                   onEdit={editFavorite}
                 />
+                </VStack>
               </Tab>
               <Tab title="历史" systemImage="clock" value="history">
+                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <HistoryPage
                   history={history}
                   colorScheme={settings.colorScheme}
@@ -919,13 +923,16 @@ function View() {
                   onClose={() => selectHomeTab("generate")}
                   onClear={clearHistory}
                 />
+                </VStack>
               </Tab>
               <Tab title="设置" systemImage="gearshape" value="settings">
+                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <SettingsPage
                   settings={settings}
                   onChange={updateSettings}
                   onClose={() => selectHomeTab("generate")}
                 />
+                </VStack>
               </Tab>
               </TabView>
               <HStack
