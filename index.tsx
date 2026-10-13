@@ -131,12 +131,37 @@ function View() {
   const colorScheme = settings.colorScheme
   // 键盘是否可见（用于在输入框右上角显示「完成」按钮收起键盘）
   const keyboardVisible = useKeyboardVisible()
-  // 页面由当前标签直接条件渲染，避免 TabView 再生成一套无法隐藏的系统标签栏。
+  // 分离标签高亮和页面内容状态，避免切换页面时先等待目标页面挂载才更新颜色。
   const [activeTab, setActiveTab] = useState<HomeTab>("generate")
+  const [selectedTab, setSelectedTab] = useState<HomeTab>("generate")
+  const pendingTabSwitchRef = useRef<number | null>(null)
+
+  function cancelPendingTabSwitch() {
+    if (pendingTabSwitchRef.current !== null) {
+      clearTimeout(pendingTabSwitchRef.current)
+      pendingTabSwitchRef.current = null
+    }
+  }
 
   function selectHomeTab(tab: HomeTab) {
+    cancelPendingTabSwitch()
+    setSelectedTab(tab)
     setActiveTab(tab)
   }
+
+  function selectHomeTabFromBar(tab: HomeTab) {
+    cancelPendingTabSwitch()
+    setSelectedTab(tab)
+    if (tab === activeTab) return
+
+    // 先让底栏高亮有机会提交，再挂载目标页面，避免重页面渲染拖慢选中色更新。
+    pendingTabSwitchRef.current = setTimeout(() => {
+      pendingTabSwitchRef.current = null
+      setActiveTab(tab)
+    }, 32)
+  }
+
+  useEffect(() => () => cancelPendingTabSwitch(), [])
 
   // 在页面容器上处理横向切换，保留原来的左右滑动交互。
   function handleTabSwipe(details: {
@@ -940,11 +965,11 @@ function View() {
                 {HOME_TABS.map((tab) => {
                   const title = tab === "generate" ? "生成" : tab === "favorites" ? "收藏" : tab === "history" ? "历史" : "设置"
                   const icon = tab === "generate" ? "barcode.viewfinder" : tab === "favorites" ? "heart" : tab === "history" ? "clock" : "gearshape"
-                  const selected = activeTab === tab
+                  const selected = selectedTab === tab
                   return (
                     <Button
                       key={`home-tab-${tab}`}
-                      action={() => selectHomeTab(tab)}
+                      action={() => selectHomeTabFromBar(tab)}
                       buttonStyle="plain"
                       containerRelativeFrame={{
                         axes: "horizontal",
