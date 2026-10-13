@@ -33,8 +33,6 @@ export function FavoritesPage({
   onRenameFavorite,
   onMoveFavorite,
   onEdit,
-  onExportBackup,
-  onImportBackup,
 }: {
   favorites: FavoriteItem[]
   colorScheme: "system" | "light" | "dark"
@@ -52,8 +50,6 @@ export function FavoritesPage({
   onRenameFavorite: (id: string, name: string) => void
   onMoveFavorite: (id: string, folder: string) => void
   onEdit: (texts: string[], type: BarcodeType) => void
-  onExportBackup: () => void
-  onImportBackup: () => void
 }) {
   // 收藏搜索关键字（空表示不筛选）；页面级状态，关闭时重置
   const [favoriteQuery, setFavoriteQuery] = useState("")
@@ -388,12 +384,6 @@ export function FavoritesPage({
         >
           收藏
         </Text>
-        <VStack alignment="leading" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-          <HStack spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
-            <Button title="导出备份" systemImage="square.and.arrow.up" action={onExportBackup} buttonStyle="borderedProminent" modifiers={modifiers().frame({ maxWidth: 'infinity' })} />
-            <Button title="导入备份" systemImage="square.and.arrow.down" action={onImportBackup} buttonStyle="bordered" modifiers={modifiers().frame({ maxWidth: 'infinity' })} />
-          </HStack>
-        </VStack>
         {favorites.length === 0 ? (
           <Text
             font={16}

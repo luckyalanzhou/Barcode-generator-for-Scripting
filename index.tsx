@@ -8,6 +8,7 @@ import {
   ScrollViewProxy,
   TabView,
   Tab,
+  Group,
   VStack,
   HStack,
   ZStack,
@@ -135,6 +136,12 @@ function View() {
   const keyboardVisible = useKeyboardVisible()
   // 官方 TabView 使用 Observable 管理当前页面，点击和左右滑动共用同一状态。
   const tabSelection = useObservable<HomeTab>("generate")
+  const [activeTab, setActiveTab] = useState<HomeTab>("generate")
+
+  function selectHomeTab(tab: HomeTab) {
+    setActiveTab(tab)
+    tabSelection.setValue(tab)
+  }
 
   // Scripting 的 TabView 文档只定义了标签选择，不保证底部样式自带分页滑动。
   // 使用官方 onDragGesture 在 TabView 层补上横向切换，避免给每个页面再套一层布局。
@@ -157,10 +164,10 @@ function View() {
       : details.translation.y
     // 横向距离不足或纵向分量更大时交给页面自己的滚动处理。
     if (Math.abs(x) < 45 || Math.abs(x) <= Math.abs(y)) return
-    const currentIndex = HOME_TABS.indexOf(tabSelection.value)
+    const currentIndex = HOME_TABS.indexOf(activeTab)
     const nextIndex = currentIndex + (x < 0 ? 1 : -1)
     if (nextIndex >= 0 && nextIndex < HOME_TABS.length) {
-      tabSelection.setValue(HOME_TABS[nextIndex])
+      selectHomeTab(HOME_TABS[nextIndex])
     }
   }
   // 用于可靠激活输入：点击输入框时自增，触发输入框 remount+autofocus 唤出键盘
@@ -176,9 +183,9 @@ function View() {
   }
 
   // 相机扫描：每个识别结果独立成为一个输入框，追加到当前列表
-  async function scanInput() {
+  async function scanInput(): Promise<boolean> {
     const texts = await scanTexts()
-    if (texts === null) return
+    if (texts === null) return false
     setInputRows((prev) => [
       ...prev.filter((s) => s.trim().length > 0),
       ...texts,
@@ -186,6 +193,11 @@ function View() {
     if (texts.length > MAX_BARCODE_ITEMS) {
       await alert(`扫描结果超过 ${MAX_BARCODE_ITEMS} 条，已只保留前 ${MAX_BARCODE_ITEMS} 条`)
     }
+    return true
+  }
+
+  async function scanFromGenerateTab() {
+    if (await scanInput()) selectHomeTab("generate")
   }
 
   // 小组件“扫描填充”入口：通过 run URL 启动脚本后自动打开扫描
@@ -195,7 +207,7 @@ function View() {
       // 运行 URL 已进入脚本后立即打开扫描，不再等待首页动画
       void scanInput()
     } else if (action === "favorites") {
-      setTimeout(() => { tabSelection.setValue("favorites") }, 250)
+      setTimeout(() => { selectHomeTab("favorites") }, 250)
     }
   }, [])
 
@@ -377,7 +389,7 @@ function View() {
     setInputRows(texts.length > 0 ? [...texts] : [""])
     setBarcodeType(type)
     setForceUnfavorited(true)
-    tabSelection.setValue("generate")
+    selectHomeTab("generate")
   }
 
   // 更新样式设置并持久化
@@ -789,14 +801,17 @@ function View() {
             // 不能把 preferredColorScheme 加在这里——运行中切换外观会改变这个「导航宿主」视图的
             // preferredColorScheme，导致框架重置导航栈、把已 push 的设置页弹回首页。
             // 因此各导航页面（设置/条码/历史/收藏）在自己的根 ScrollView 上分别应用 schemeProps。
-            <TabView
-              selection={tabSelection}
-              onDragGesture={{
-                minDistance: 20,
-                coordinateSpace: "local",
-                onEnded: handleTabSwipe,
-              }}
-            >
+            <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
+              <TabView
+                selection={tabSelection}
+                tabBarVisibility="hidden"
+                modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}
+                onDragGesture={{
+                  minDistance: 20,
+                  coordinateSpace: "local",
+                  onEnded: handleTabSwipe,
+                }}
+              >
               <Tab title="生成" systemImage="barcode.viewfinder" value="generate">
             <FullScreenBg cs={colorScheme}>
               <VStack
@@ -878,7 +893,7 @@ function View() {
                   barcodeType={barcodeType}
                   buildItems={buildItems}
                   onFavorite={addFavorite}
-                  onClose={() => tabSelection.setValue("generate")}
+                  onClose={() => selectHomeTab("generate")}
                   onRemove={removeFavorite}
                   onRenameFolder={renameFolder}
                   onCreateFolder={createFolder}
@@ -888,8 +903,6 @@ function View() {
                   onRenameFavorite={renameFavorite}
                   onMoveFavorite={moveFavorite}
                   onEdit={editFavorite}
-                  onExportBackup={() => { void exportBackup() }}
-                  onImportBackup={() => { void importBackup() }}
                 />
               </Tab>
               <Tab title="历史" systemImage="clock" value="history">
@@ -903,7 +916,7 @@ function View() {
                   buildItems={buildItems}
                   onFavorite={addFavorite}
                   onCreateFolder={createFolder}
-                  onClose={() => tabSelection.setValue("generate")}
+                  onClose={() => selectHomeTab("generate")}
                   onClear={clearHistory}
                 />
               </Tab>
@@ -911,10 +924,61 @@ function View() {
                 <SettingsPage
                   settings={settings}
                   onChange={updateSettings}
-                  onClose={() => tabSelection.setValue("generate")}
+                  onClose={() => selectHomeTab("generate")}
                 />
               </Tab>
-            </TabView>
+              </TabView>
+              <HStack
+                alignment="center"
+                spacing={0}
+                modifiers={modifiers()
+                  .frame({ maxWidth: "infinity", height: 58, alignment: "center" })
+                  .padding({ leading: 8, trailing: 8 })
+                  .background({ style: "regularMaterial" })}
+              >
+                {HOME_TABS.map((tab) => {
+                  const title = tab === "generate" ? "生成" : tab === "favorites" ? "收藏" : tab === "history" ? "历史" : "设置"
+                  const icon = tab === "generate" ? "barcode.viewfinder" : tab === "favorites" ? "heart" : tab === "history" ? "clock" : "gearshape"
+                  const selected = activeTab === tab
+                  return (
+                    <Button
+                      key={`home-tab-${tab}`}
+                      action={() => selectHomeTab(tab)}
+                      buttonStyle="plain"
+                      contextMenu={tab === "generate" ? {
+                        menuItems: (
+                          <Group>
+                            <Button title="扫描填充" systemImage="viewfinder" action={() => { void scanFromGenerateTab() }} />
+                          </Group>
+                        ),
+                      } : tab === "favorites" ? {
+                        menuItems: (
+                          <Group>
+                            <Button title="导出备份" systemImage="square.and.arrow.up" action={() => { void exportBackup() }} />
+                            <Button title="导入备份" systemImage="square.and.arrow.down" action={() => { void importBackup() }} />
+                          </Group>
+                        ),
+                      } : tab === "history" ? {
+                        menuItems: (
+                          <Group>
+                            <Button title="清空历史" systemImage="trash" role="destructive" action={() => { void clearHistory() }} />
+                          </Group>
+                        ),
+                      } : undefined}
+                      modifiers={modifiers()
+                        .frame({ maxWidth: "infinity", height: 54, alignment: "center" })
+                        .padding(0)
+                        .contentShape({ type: "rect", cornerRadius: 10 })}
+                    >
+                      <VStack alignment="center" spacing={2} modifiers={modifiers().frame({ maxWidth: "infinity", height: 52, alignment: "center" })}>
+                        <Image systemName={icon} renderingMode="template" modifiers={modifiers().font(19).foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))} />
+                        <Text font={10} fontWeight={selected ? "semibold" : "regular"} modifiers={modifiers().foregroundStyle(selected ? "#3b82f6" : sub(colorScheme))}>{title}</Text>
+                      </VStack>
+                    </Button>
+                  )
+                })}
+              </HStack>
+            </VStack>
           )
         }}
       </ScrollViewReader>
