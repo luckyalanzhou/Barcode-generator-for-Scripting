@@ -6,8 +6,6 @@ import {
   ScrollView,
   ScrollViewReader,
   ScrollViewProxy,
-  TabView,
-  Tab,
   Group,
   VStack,
   HStack,
@@ -19,7 +17,6 @@ import {
   Spacer,
   modifiers,
   useState,
-  useObservable,
   useRef,
   useEffect,
   useKeyboardVisible,
@@ -134,17 +131,14 @@ function View() {
   const colorScheme = settings.colorScheme
   // 键盘是否可见（用于在输入框右上角显示「完成」按钮收起键盘）
   const keyboardVisible = useKeyboardVisible()
-  // 官方 TabView 使用 Observable 管理当前页面，点击和左右滑动共用同一状态。
-  const tabSelection = useObservable<HomeTab>("generate")
+  // 页面由当前标签直接条件渲染，避免 TabView 再生成一套无法隐藏的系统标签栏。
   const [activeTab, setActiveTab] = useState<HomeTab>("generate")
 
   function selectHomeTab(tab: HomeTab) {
     setActiveTab(tab)
-    tabSelection.setValue(tab)
   }
 
-  // Scripting 的 TabView 文档只定义了标签选择，不保证底部样式自带分页滑动。
-  // 使用官方 onDragGesture 在 TabView 层补上横向切换，避免给每个页面再套一层布局。
+  // 在页面容器上处理横向切换，保留原来的左右滑动交互。
   function handleTabSwipe(details: {
     location: { x: number, y: number },
     startLocation: { x: number, y: number },
@@ -802,8 +796,8 @@ function View() {
             // preferredColorScheme，导致框架重置导航栈、把已 push 的设置页弹回首页。
             // 因此各导航页面（设置/条码/历史/收藏）在自己的根 ScrollView 上分别应用 schemeProps。
             <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
-              <TabView
-                selection={tabSelection}
+              <VStack
+                spacing={0}
                 modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}
                 onDragGesture={{
                   minDistance: 20,
@@ -811,8 +805,8 @@ function View() {
                   onEnded: handleTabSwipe,
                 }}
               >
-              <Tab title="生成" systemImage="barcode.viewfinder" value="generate">
-            <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
+              {activeTab === "generate" && (
+            <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
             <FullScreenBg cs={colorScheme}>
               <VStack
                 spacing={0}
@@ -885,9 +879,9 @@ function View() {
                </VStack>
             </FullScreenBg>
             </VStack>
-              </Tab>
-              <Tab title="收藏" systemImage="heart" value="favorites">
-                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
+              )}
+              {activeTab === "favorites" && (
+                <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <FavoritesPage
                   favorites={favorites}
                   colorScheme={settings.colorScheme}
@@ -907,9 +901,9 @@ function View() {
                   onEdit={editFavorite}
                 />
                 </VStack>
-              </Tab>
-              <Tab title="历史" systemImage="clock" value="history">
-                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
+              )}
+              {activeTab === "history" && (
+                <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <HistoryPage
                   history={history}
                   colorScheme={settings.colorScheme}
@@ -924,17 +918,17 @@ function View() {
                   onClear={clearHistory}
                 />
                 </VStack>
-              </Tab>
-              <Tab title="设置" systemImage="gearshape" value="settings">
-                <VStack tabBarVisibility="hidden" spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
+              )}
+              {activeTab === "settings" && (
+                <VStack spacing={0} modifiers={modifiers().frame({ maxWidth: "infinity", maxHeight: "infinity" })}>
                 <SettingsPage
                   settings={settings}
                   onChange={updateSettings}
                   onClose={() => selectHomeTab("generate")}
                 />
                 </VStack>
-              </Tab>
-              </TabView>
+              )}
+              </VStack>
               <HStack
                 alignment="center"
                 spacing={0}
