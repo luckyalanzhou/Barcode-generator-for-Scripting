@@ -236,7 +236,7 @@ export function SettingsPage({
               font={14}
               modifiers={modifiers().foregroundStyle(sub(colorScheme))}
             >
-              版本: 1.2.0
+              版本: 1.2.4
             </Text>
             <Text
               font={14}
