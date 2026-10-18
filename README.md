@@ -1,52 +1,39 @@
 # 条码生成器
 
-运行于 iPhone 和 iPad 上 **Scripting** 应用内的原生脚本，用于批量生成、收藏和管理条码。它不是独立安装的 iOS App。
+适用于 iPhone 和 iPad 的 Scripting 脚本，支持批量生成、收藏和管理条码。
 
 ## 功能
 
 - 支持 QR Code、Code 128-B、Code 39、EAN-13、EAN-8、UPC-A、ITF-14 和 Codabar。
-- 支持多个输入行批量生成；EAN、UPC 和 ITF-14 可自动计算并校验校验位。
-- 可扫描条码填充输入，管理收藏夹与文件夹、查看生成历史，并导入或导出收藏备份。
-- 提供自定义显示样式和 Scripting 主屏幕小组件。
+- 多输入行批量生成，自动计算并校验 EAN、UPC 和 ITF-14 校验位。
+- 扫描填充、收藏与文件夹管理、历史记录、收藏备份导入与导出。
+- 自定义显示样式；主屏幕小组件提供收藏页和扫描填充快捷入口。
 
 ## 安装
 
-先在 iPhone 或 iPad 上安装 [Scripting](https://apps.apple.com/us/app/scripting/id6479691128)，然后点击：
+安装 [Scripting](https://apps.apple.com/us/app/scripting/id6479691128)，再点击下方链接并确认导入：
 
 [一键添加到 Scripting](https://scripting.fun/import_scripts?urls=%5B%22https%3A%2F%2Fgithub.com%2Fluckyalanzhou%2FBarcode-generator-for-Scripting%22%5D)
 
-在 Scripting 中确认导入即可。也可以在 Scripting 的导入功能中粘贴仓库地址：
+也可在 Scripting 中导入仓库地址：
 
 ```text
 https://github.com/luckyalanzhou/Barcode-generator-for-Scripting
 ```
 
-如需保留收藏数据，建议在更新前从“收藏”标签的长按菜单导出备份。
-
 ## 使用
 
-1. 打开“条码生成器”，选择条码类型，添加一个或多个输入行并填写内容；每行分别生成一条条码。
-2. 点击“生成条码”。例如选择 EAN-13，输入 `4006381333931` 后生成。
-3. 长按底部标签可使用快捷操作：在“生成”中扫描填充，在“收藏”中导入或导出备份，在“历史”中清空历史。
-4. 添加 Scripting 小组件到 iOS 主屏幕，可使用打开收藏页、启动扫描填充等快捷入口。
+选择条码类型，填写输入行，点击“生成条码”。每行生成一条条码，例如 EAN-13：`4006381333931`。
 
-## 本地开发
+长按底部标签可使用快捷操作：
 
-需要 Node.js 20+ 和 pnpm 9+。克隆仓库后运行：
-
-```sh
-git clone https://github.com/luckyalanzhou/Barcode-generator-for-Scripting.git
-cd Barcode-generator-for-Scripting
-pnpm install --frozen-lockfile
-pnpm scripting:dev
-```
-
-然后在 Scripting 应用中连接 CLI 提供的本地工作区。脚本由 Scripting 负责运行；本项目不构建独立 iOS 安装包，也不需要 Xcode。
+- **生成**：扫描填充。
+- **收藏**：导入或导出备份，建议更新前导出。
+- **历史**：清空历史。
 
 ## 版本、兼容性与许可
 
-- 当前仓库元数据版本：`1.2.4`（见 [`script.json`](script.json)）。
-- 自动更新未启用（`script.json` 未设置 `remoteResource.autoUpdateInterval`）。需要更新时，请在 Scripting 中检查此脚本远程来源的更新选项；如需保留收藏数据，更新前建议先导出备份。
-- 需要 iPhone 或 iPad 上的 Scripting 应用；[App Store 当前列出的系统要求为 iOS/iPadOS 17.0 或更新版本](https://apps.apple.com/us/app/scripting/id6479691128)。本仓库未单独声明最低 Scripting 应用版本。
-- 反馈问题或建议，请前往 [GitHub Issues](https://github.com/luckyalanzhou/Barcode-generator-for-Scripting/issues)。
-- 仓库当前没有 `LICENSE` 文件，尚未声明开源许可；公开可见不代表可按某种开源协议复用。
+- 当前版本：`1.2.4`（[`script.json`](script.json)）；未配置自动更新。
+- 系统要求见 [Scripting App Store 页面](https://apps.apple.com/us/app/scripting/id6479691128)。
+- 问题反馈：[GitHub Issues](https://github.com/luckyalanzhou/Barcode-generator-for-Scripting/issues)。
+- 许可：[MIT](LICENSE)。
