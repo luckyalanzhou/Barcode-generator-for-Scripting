@@ -40,21 +40,21 @@ import {
   DEFAULT_STYLE,
   MAX_BARCODE_ITEMS,
   maxTextLength,
-} from "./barcode_core"
-import { HistoryItem, FavoriteItem, InterchangeBackup, normalizeFavorite, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./storage"
+} from "./src/barcode_core"
+import { HistoryItem, FavoriteItem, InterchangeBackup, normalizeFavorite, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./src/storage"
 const HISTORY_KEY = "recent_history"
 const HISTORY_MAX = 20
 const BACKUP_MANIFEST_NAMES = ["barcode-generator-backup.json", "barcode-generator-backup-android.json"]
 type HomeTab = "generate" | "favorites" | "history" | "settings"
 const HOME_TABS: HomeTab[] = ["generate", "favorites", "history", "settings"]
 function makeRowId(): string { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
-import { validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid } from "./validation"
-import { CS, schemeProps, lab, sub, ter, cardB, capB, pageB, inputT, FullScreenBg } from "./theme"
-import { SettingsPage } from "./SettingsPage"
-import { BarcodesPage, PresentedBarcodes } from "./BarcodesPage"
-import { HistoryPage } from "./HistoryPage"
-import { FavoritesPage } from "./FavoritesPage"
-import { InputPage } from "./InputPage"
+import { validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid } from "./src/validation"
+import { CS, schemeProps, lab, sub, ter, cardB, capB, pageB, inputT, FullScreenBg } from "./src/theme"
+import { SettingsPage } from "./src/pages/SettingsPage"
+import { BarcodesPage, PresentedBarcodes } from "./src/pages/BarcodesPage"
+import { HistoryPage } from "./src/pages/HistoryPage"
+import { FavoritesPage } from "./src/pages/FavoritesPage"
+import { InputPage } from "./src/pages/InputPage"
 
 declare const Dialog: any
 async function alert(message: string): Promise<void> {

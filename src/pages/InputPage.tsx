@@ -1,6 +1,6 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Picker, RoundedRectangle, modifiers, useKeyboardVisible } from "scripting"
-import { BarcodeType, BARCODE_TYPES, MAX_BARCODE_ITEMS, typeName, scanTexts } from "./barcode_core"
-import { CS, lab, sub, cardB, capB, inputT } from "./theme"
+import { BarcodeType, BARCODE_TYPES, MAX_BARCODE_ITEMS, typeName, scanTexts } from "../barcode_core"
+import { CS, lab, sub, cardB, capB, inputT } from "../theme"
 
 declare const Dialog: any
 async function alert(message: string): Promise<void> {

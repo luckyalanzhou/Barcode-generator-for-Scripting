@@ -1,8 +1,8 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, modifiers, useState } from "scripting"
-import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
-import { HistoryItem, FavoriteItem } from "./storage"
+import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
+import { HistoryItem, FavoriteItem } from "../storage"
 import { PresentedBarcodes } from "./BarcodesPage"
-import { CS, schemeProps, lab, sub, cardB, FullScreenBg } from "./theme"
+import { CS, schemeProps, lab, sub, cardB, FullScreenBg } from "../theme"
 
 function formatHistoryTime(time: number): string {
   const d = new Date(time), now = new Date(), pad = (n: number) => String(n).padStart(2, "0")

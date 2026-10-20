@@ -1,12 +1,12 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Group, modifiers, useState } from "scripting"
-import { BarcodeItem, BarcodeType, StyleSettings } from "./barcode_core"
-import { FavoriteItem } from "./storage"
+import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
+import { FavoriteItem } from "../storage"
 declare const Dialog: any
 async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
 }
 import { PresentedBarcodes } from "./BarcodesPage"
-import { CS, schemeProps, lab, sub, ter, cardB, inputT, FullScreenBg } from "./theme"
+import { CS, schemeProps, lab, sub, ter, cardB, inputT, FullScreenBg } from "../theme"
 
 function formatFavoriteTime(time: number | undefined): string {
   if (typeof time !== "number" || !Number.isFinite(time)) return ""

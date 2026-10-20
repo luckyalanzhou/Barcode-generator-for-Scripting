@@ -1,12 +1,12 @@
 import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, ZStack, modifiers, ImageRenderer, useState } from "scripting"
-import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings, isBarcodeScanDense } from "./barcode_core"
-import { FavoriteItem } from "./storage"
-import { HistoryItem } from "./storage"
+import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings, isBarcodeScanDense } from "../barcode_core"
+import { FavoriteItem } from "../storage"
+import { HistoryItem } from "../storage"
 declare const Dialog: any
 async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
 }
-import { CS, schemeProps, lab, sub, FullScreenBg } from "./theme"
+import { CS, schemeProps, lab, sub, FullScreenBg } from "../theme"
 
 function ResultActionButton({ icon, title, color, action }: { icon: string; title: string; color: any; action: () => void }) {
   return (
