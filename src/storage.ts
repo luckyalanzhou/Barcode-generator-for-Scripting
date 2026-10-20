@@ -1,4 +1,5 @@
 import { DEFAULT_STYLE, StyleSettings, BarcodeType } from "./barcode_core"
+import { MAX_FOLDER_DEPTH, validateFolderPath } from "./validation"
 export const HISTORY_KEY = "recent_history"
 export const HISTORY_MAX = 20
 export const FAVORITES_KEY = "favorites"
@@ -23,7 +24,12 @@ export type FavoriteItem = { id: string; name: string; texts: string[]; type: Ba
 export type InterchangeFavorite = { id?: string; name: string; rootFolder: string; subFolder: string; folder?: string; type: BarcodeType; barcodeType?: BarcodeType; time: number; texts: string[] }
 export type InterchangeBackup = { format: "BarcodeGeneratorInterchange"; version: 1; exportedAt: number; folders: { name: string; children: string[] }[]; favorites: InterchangeFavorite[] }
 const BARCODE_TYPES: BarcodeType[] = ["qr", "code128", "code39", "ean13", "ean8", "upca", "itf14", "codabar"]
+function assertSafeFolderPath(folder: string) {
+  const error = validateFolderPath(folder)
+  if (error) throw new Error(error)
+}
 function favoriteFilePath(favorite: FavoriteItem): string {
+  assertSafeFolderPath(favorite.folder ?? "")
   const folder = favorite.folder ? `/${favorite.folder}` : ""
   return `${FAVORITES_FILES_ROOT}${folder}/${encodeURIComponent(favorite.id)}.json`
 }
@@ -35,7 +41,7 @@ export function normalizeFavorite(f: any): FavoriteItem | null {
     name: f.name.trim(),
     type: BARCODE_TYPES.includes(f.type) ? f.type : "code128",
     time: typeof f.time === "number" && Number.isFinite(f.time) ? f.time : Date.now(),
-    folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2).join("/") : "",
+    folder: typeof f.folder === "string" ? f.folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, MAX_FOLDER_DEPTH).join("/") : "",
   }
 }
 function loadFavoritesFromFiles(root: string): FavoriteItem[] {
@@ -92,6 +98,8 @@ export function loadFavorites(): FavoriteItem[] {
   return allFavorites
 }
 export function saveFavorites(items: FavoriteItem[]) {
+  // Validate the whole batch before file writes, cleanup, or Storage fallback.
+  for (const favorite of items) favoriteFilePath(favorite)
   // Keep one JSON file per favorite outside the script package. Storage is a
   // mirror so older script versions can still read the data.
   try { saveFavoritesToFiles(items) } catch { /* Storage remains the fallback */ }
@@ -110,13 +118,14 @@ export function loadFolders(): string[] {
   const saved = Array.isArray(shared) && shared.length > 0 ? shared : (Array.isArray(local) ? local : shared)
   const favoriteFolders = loadFavorites().map((f) => f.folder).filter((f) => f.trim().length > 0)
   const normalized = Array.isArray(saved) ? saved.filter((f) => typeof f === "string").flatMap((folder) => {
-    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, 2)
+    const parts = folder.split("/").map((part) => part.trim()).filter(Boolean).slice(0, MAX_FOLDER_DEPTH)
     return parts.length === 2 ? [parts[0], parts.join("/")] : parts
   }) : []
   return Array.from(new Set([...normalized, ...favoriteFolders])).filter((f) => f.trim().length > 0)
 }
 export function saveFolders(folders: string[]) {
   const normalized = Array.from(new Set(folders)).filter((f) => f.trim().length > 0)
+  for (const folder of normalized) assertSafeFolderPath(folder)
   try {
     FileManager.createDirectorySync(EXTERNAL_DATA_ROOT, true)
     FileManager.writeAsStringSync(FOLDERS_FILE, JSON.stringify(normalized, null, 2))
@@ -144,12 +153,14 @@ export function parseInterchangeBackup(value: unknown): InterchangeBackup {
     // Android v1 uses a flat string array; the scripting format uses
     // { name, children } objects. Normalize both forms for the UI.
     if (typeof root === "string") {
+      assertSafeFolderPath(root)
       const pathParts = root.split("/").map((part: string) => part.trim()).filter(Boolean)
-      if (pathParts.length === 0 || pathParts.length > 2) throw new Error("备份中存在无效的文件夹路径")
+      if (pathParts.length === 0 || pathParts.length > MAX_FOLDER_DEPTH) throw new Error("备份中存在无效的文件夹路径")
       return { name: pathParts[0], children: pathParts.length === 2 ? [pathParts[1]] : [] }
     }
-    if (!root || typeof root.name !== "string" || !root.name.trim() || !Array.isArray(root.children)) throw new Error("备份中存在无效的文件夹结构")
-    const children = root.children.map((child: any) => { if (typeof child !== "string" || child.includes("/")) throw new Error("备份中存在无效的二级文件夹"); return child.trim() }).filter(Boolean)
+    if (!root || typeof root.name !== "string" || !root.name.trim() || root.name.includes("/") || !Array.isArray(root.children)) throw new Error("备份中存在无效的文件夹结构")
+    assertSafeFolderPath(root.name)
+    const children = root.children.map((child: any) => { if (typeof child !== "string" || child.includes("/")) throw new Error("备份中存在无效的二级文件夹"); assertSafeFolderPath(child); return child.trim() }).filter(Boolean)
     return { name: root.name.trim(), children: Array.from(new Set(children)) }
   })
   const favorites = data.favorites.map((item: any) => {
@@ -157,7 +168,11 @@ export function parseInterchangeBackup(value: unknown): InterchangeBackup {
     const rootFolder = typeof item.rootFolder === "string" ? item.rootFolder.trim() : ""
     const subFolder = typeof item.subFolder === "string" ? item.subFolder.trim() : ""
     const legacyFolder = typeof item.folder === "string" ? item.folder.trim() : ""
+    assertSafeFolderPath(rootFolder)
+    assertSafeFolderPath(subFolder)
+    assertSafeFolderPath(legacyFolder)
     const folderParts = legacyFolder.split("/").map((part: string) => part.trim()).filter(Boolean)
+    if (folderParts.length > MAX_FOLDER_DEPTH) throw new Error(`备份中的收藏文件夹最多支持 ${MAX_FOLDER_DEPTH} 级`)
     const resolvedRoot = rootFolder || folderParts[0] || ""
     const resolvedSub = subFolder || folderParts[1] || ""
     if (resolvedRoot.includes("/") || resolvedSub.includes("/")) throw new Error("备份中存在无效的文件夹路径")
@@ -187,7 +202,9 @@ export function loadSettings(): StyleSettings {
 }
 export function saveSettings(settings: StyleSettings) { Storage.set(SETTINGS_KEY, settings) }
 function readOldICloudJSON<T>(fileName: string): T | null { if (!FileManager.isiCloudEnabled) return null; const path = `${FileManager.iCloudDocumentsDirectory}/${fileName}`; if (!FileManager.existsSync(path)) return null; try { return JSON.parse(FileManager.readAsStringSync(path)) as T } catch { return null } }
-function migrateLegacyData() { const importedFavorites = Storage.get<FavoriteItem[]>("barcode_generator_legacy_favorites", { shared: true }); const importedHistory = Storage.get<HistoryItem[]>("barcode_generator_legacy_history", { shared: true }); if (!Storage.contains(FAVORITES_KEY) && Array.isArray(importedFavorites)) saveFavorites(importedFavorites); if (!Storage.contains(HISTORY_KEY) && Array.isArray(importedHistory)) saveHistory(importedHistory) }
-function migrateFavoritesToSharedStorage() { if (!Array.isArray(Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true }))) { const oldFavorites = Storage.get<FavoriteItem[]>(FAVORITES_KEY) ?? readOldICloudJSON<FavoriteItem[]>(OLD_FAVORITES_FILE); if (Array.isArray(oldFavorites)) saveFavorites(oldFavorites) } if (!Array.isArray(Storage.get<string[]>(FOLDERS_KEY, { shared: true }))) { const oldFolders = Storage.get<string[]>(FOLDERS_KEY) ?? readOldICloudJSON<string[]>(OLD_FOLDERS_FILE); if (Array.isArray(oldFolders)) saveFolders(oldFolders) } }
+// Leave unsafe legacy records in their original store; never relocate them at startup.
+function migrateLegacyData() { const importedFavorites = Storage.get<FavoriteItem[]>("barcode_generator_legacy_favorites", { shared: true }); const importedHistory = Storage.get<HistoryItem[]>("barcode_generator_legacy_history", { shared: true }); if (!Storage.contains(FAVORITES_KEY) && !Array.isArray(Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true })) && Array.isArray(importedFavorites) && importedFavorites.every((favorite) => favorite && !validateFolderPath(favorite.folder ?? ""))) saveFavorites(importedFavorites); if (!Storage.contains(HISTORY_KEY) && Array.isArray(importedHistory)) saveHistory(importedHistory) }
+function hasReadableFoldersIndex() { if (!FileManager.existsSync(FOLDERS_FILE)) return false; try { return Array.isArray(JSON.parse(FileManager.readAsStringSync(FOLDERS_FILE))) } catch { return false } }
+function migrateFavoritesToSharedStorage() { if (!Array.isArray(Storage.get<FavoriteItem[]>(FAVORITES_KEY, { shared: true }))) { const oldFavorites = Storage.get<FavoriteItem[]>(FAVORITES_KEY) ?? readOldICloudJSON<FavoriteItem[]>(OLD_FAVORITES_FILE); if (Array.isArray(oldFavorites) && oldFavorites.every((favorite) => favorite && !validateFolderPath(favorite.folder ?? ""))) saveFavorites(oldFavorites) } if (!Array.isArray(Storage.get<string[]>(FOLDERS_KEY, { shared: true })) && !hasReadableFoldersIndex()) { const oldFolders = Storage.get<string[]>(FOLDERS_KEY) ?? readOldICloudJSON<string[]>(OLD_FOLDERS_FILE); if (Array.isArray(oldFolders) && oldFolders.every((folder) => !validateFolderPath(folder))) saveFolders(oldFolders) } }
 migrateLegacyData()
 migrateFavoritesToSharedStorage()

@@ -2,7 +2,8 @@
   "name": "barcode-generator-for-scripting",
   "private": true,
   "scripts": {
-    "scripting:dev": "scripting-cli start"
+    "scripting:dev": "scripting-cli start",
+    "test": "node --test"
   },
   "devDependencies": {
     "scripting-cli": "^1.5.0"

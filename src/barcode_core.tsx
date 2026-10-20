@@ -2,7 +2,7 @@
 import { Canvas, Device, modifiers } from "scripting"
 
 // 共享扫描函数：第一页扫描按钮使用。
-// 相机扫描文字：打开相机取景，对准文字自动识别，返回识别出的文字数组（每项一行）；取消时返回 null。
+// 相机文字识别：打开相机取景，对准文字自动识别，返回识别出的文字数组（每项一行）；取消时返回 null。
 export async function scanTexts(): Promise<string[] | null> {
   try {
     const texts = await Vision.scanDocument({
@@ -35,12 +35,12 @@ export interface BarcodeTypeInfo {
 // 所有可选类型（按展示顺序）
 export const BARCODE_TYPES: BarcodeTypeInfo[] = [
   { id: "qr", name: "QR Code", hint: "任意文本，最多 200 个字符" },
-  { id: "code128", name: "Code 128-B", hint: "任意文本，最多 80 个字符" },
+  { id: "code128", name: "Code 128-B", hint: "ASCII 可打印字符（32–126），最多 80 个字符" },
   { id: "code39", name: "Code 39", hint: "A-Z 0-9 - . 空格 $ / + %，最多 40 个字符" },
-  { id: "ean13", name: "EAN-13", hint: "12~13 位数字" },
-  { id: "ean8", name: "EAN-8", hint: "7~8 位数字" },
-  { id: "upca", name: "UPC-A", hint: "11~12 位数字" },
-  { id: "itf14", name: "ITF-14", hint: "13~14 位数字" },
+  { id: "ean13", name: "EAN-13", hint: "12 位自动计算校验位；13 位须校验位正确（下方显示完整编码值）" },
+  { id: "ean8", name: "EAN-8", hint: "7 位自动计算校验位；8 位须校验位正确（下方显示完整编码值）" },
+  { id: "upca", name: "UPC-A", hint: "11 位自动计算校验位；12 位须校验位正确（下方显示完整编码值）" },
+  { id: "itf14", name: "ITF-14", hint: "13 位自动计算校验位；14 位须校验位正确（下方显示完整编码值）" },
   { id: "codabar", name: "Codabar", hint: "数字及 - $ : / . +，首尾 A-D，最多 40 个字符" },
 ]
 
@@ -347,6 +347,26 @@ export function encodeITF14(text: string): number[] | null {
   // 终止符：宽条 窄空 窄条
   bits.push(1, 1, 0, 1)
   return bits
+}
+
+// Return the digits represented by fixed-length symbols, including the calculated check digit.
+export function humanReadableBarcodeText(type: BarcodeType, text: string): string {
+  const cleaned = text.replace(/\s/g, "")
+  let dataLength: number
+  let checkDigitFor: (data: string) => number
+  switch (type) {
+    case "ean13": dataLength = 12; checkDigitFor = ean13CheckDigit; break
+    case "ean8": dataLength = 7; checkDigitFor = ean8CheckDigit; break
+    case "upca": dataLength = 11; checkDigitFor = upcaCheckDigit; break
+    case "itf14": dataLength = 13; checkDigitFor = itf14CheckDigit; break
+    default: return text
+  }
+
+  if (!/^\d+$/.test(cleaned) || (cleaned.length !== dataLength && cleaned.length !== dataLength + 1)) return text
+  const data = cleaned.slice(0, dataLength)
+  const checkDigit = String(checkDigitFor(data))
+  if (cleaned.length === dataLength + 1 && cleaned.slice(dataLength) !== checkDigit) return text
+  return data + checkDigit
 }
 
 // ============ Codabar ============

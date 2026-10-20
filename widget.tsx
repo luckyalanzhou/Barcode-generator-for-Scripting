@@ -8,9 +8,9 @@ function widgetLanguage(): WidgetLanguage {
   return "zh-Hans"
 }
 const TEXTS = {
-  "zh-Hans": { generate: "条码生成", barcode: "条码", quickAccess: "快速访问", scanFill: "扫描填充", recognizeFill: "识别文字并填入", recognize: "识别内容", favorites: "收藏夹", viewFavorites: "查看收藏", start: "一键开始", scan: "扫描", favorite: "收藏" },
-  "zh-Hant": { generate: "條碼產生", barcode: "條碼", quickAccess: "快速存取", scanFill: "掃描填入", recognizeFill: "辨識文字並填入", recognize: "辨識內容", favorites: "收藏夾", viewFavorites: "查看收藏", start: "一鍵開始", scan: "掃描", favorite: "收藏" },
-  en: { generate: "Barcode Generator", barcode: "Barcode", quickAccess: "Quick Access", scanFill: "Scan & Fill", recognizeFill: "Recognize and fill", recognize: "Recognize content", favorites: "Favorites", viewFavorites: "View favorites", start: "Get started", scan: "Scan", favorite: "Favorites" },
+  "zh-Hans": { generate: "条码生成", barcode: "条码", quickAccess: "快速访问", scanFill: "识别文字填充", recognizeFill: "识别文字并填入", recognize: "识别文字", favorites: "收藏夹", viewFavorites: "查看收藏", start: "一键开始", scan: "识别文字", favorite: "收藏" },
+  "zh-Hant": { generate: "條碼產生", barcode: "條碼", quickAccess: "快速存取", scanFill: "辨識文字填入", recognizeFill: "辨識文字並填入", recognize: "辨識文字", favorites: "收藏夾", viewFavorites: "查看收藏", start: "一鍵開始", scan: "辨識文字", favorite: "收藏" },
+  en: { generate: "Barcode Generator", barcode: "Barcode", quickAccess: "Quick Access", scanFill: "Recognize & Fill", recognizeFill: "Recognize text and fill", recognize: "Recognize text", favorites: "Favorites", viewFavorites: "View favorites", start: "Get started", scan: "Recognize", favorite: "Favorites" },
 } as const
 
 function ActionLink({ url, icon, title, subtitle }: { url: string; icon: string; title: string; subtitle?: string }) {

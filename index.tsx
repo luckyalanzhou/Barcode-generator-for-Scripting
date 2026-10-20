@@ -39,69 +39,61 @@ import {
   StyleSettings,
   DEFAULT_STYLE,
   MAX_BARCODE_ITEMS,
-  maxTextLength,
 } from "./src/barcode_core"
-import { HistoryItem, FavoriteItem, InterchangeBackup, normalizeFavorite, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings } from "./src/storage"
-const HISTORY_KEY = "recent_history"
-const HISTORY_MAX = 20
+import { HistoryItem, FavoriteItem, InterchangeBackup, normalizeFavorite, parseInterchangeBackup, interchangeFoldersToPaths, joinFolder, loadHistory, saveHistory, loadFavorites, saveFavorites, loadFolders, saveFolders, loadSettings, saveSettings, HISTORY_MAX } from "./src/storage"
 const BACKUP_MANIFEST_NAMES = ["barcode-generator-backup.json", "barcode-generator-backup-android.json"]
 type HomeTab = "generate" | "favorites" | "history" | "settings"
 const HOME_TABS: HomeTab[] = ["generate", "favorites", "history", "settings"]
 function makeRowId(): string { return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
-import { validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid } from "./src/validation"
+function barcodeTypeHint(type: BarcodeType): string {
+  return BARCODE_TYPES.find((item) => item.id === type)?.hint ?? ""
+}
+import { MAX_FOLDER_DEPTH, validateTexts as validateBarcodeTexts, collectNonEmptyTexts, isBarcodeItemValid, validateFolderDepth, validateFolderPath, wouldExceedFolderDepthAfterMove, wouldExceedFolderDepthAfterRename } from "./src/validation"
 import { CS, schemeProps, lab, sub, ter, cardB, capB, pageB, inputT, FullScreenBg } from "./src/theme"
 import { SettingsPage } from "./src/pages/SettingsPage"
 import { BarcodesPage, PresentedBarcodes } from "./src/pages/BarcodesPage"
 import { HistoryPage } from "./src/pages/HistoryPage"
 import { FavoritesPage } from "./src/pages/FavoritesPage"
-import { InputPage } from "./src/pages/InputPage"
 
 declare const Dialog: any
 async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
 }
+function checkFolderPaths(paths: string[]): boolean {
+  const error = paths.map(validateFolderPath).find(Boolean)
+  if (error) { void alert(error); return false }
+  return true
+}
+function favoriteListsMatch(actual: FavoriteItem[], expected: FavoriteItem[]): boolean {
+  return actual.length === expected.length && actual.every((saved, index) => {
+    const source = expected[index]
+    return saved.id === source.id && saved.name === source.name && saved.type === source.type &&
+      saved.time === source.time && saved.folder === source.folder && saved.texts.length === source.texts.length &&
+      saved.texts.every((text, textIndex) => text === source.texts[textIndex])
+  })
+}
+function favoritesPersisted(expected: FavoriteItem[]): boolean {
+  try { return favoriteListsMatch(loadFavorites(), expected) } catch { return false }
+}
+function folderPathsPersisted(present: string[], absent: string[] = []): boolean {
+  if (present.length === 0 && absent.length === 0) return true
+  try {
+    const saved = loadFolders()
+    return present.every((folder) => saved.includes(folder)) && absent.every((folder) => !saved.includes(folder))
+  } catch { return false }
+}
+function restoreFolderState(folders: string[], favorites?: FavoriteItem[]) {
+  saveFolders(folders)
+  if (favorites !== undefined) saveFavorites(favorites)
+}
 declare const FileManager: any
 declare const Data: any
-declare const Keychain: any
-declare function fetch(input: string, init?: any): Promise<any>
-const GITHUB_TOKEN_KEY = "barcode_generator_github_token"
-const GITHUB_USER_KEY = "barcode_generator_github_user"
 
 
 
 
 
 
-
-async function pushProjectToGitHub(): Promise<void> {
-  const dir = FileManager.scriptsDirectory + "/条码生成器"
-  const descriptor = JSON.parse(FileManager.readAsStringSync(dir + "/script.json"))
-  const remote = descriptor.remoteResource?.url?.match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?$/)
-  if (!remote) throw new Error("script.json 中没有有效的 GitHub 远程地址")
-  let token = Keychain.get(GITHUB_TOKEN_KEY)
-  let username = Keychain.get(GITHUB_USER_KEY) || "x-access-token"
-  if (!token) {
-    const entered = await Dialog.prompt("请输入 Personal Access Token（仅保存到 Keychain）", "Token")
-    if (!entered) throw new Error("已取消 Token 输入")
-    token = entered
-    Keychain.set(GITHUB_TOKEN_KEY, token)
-    Keychain.set(GITHUB_USER_KEY, username)
-  }
-  const headers = { "Accept": "application/vnd.github+json", "Authorization": `Bearer ${token}`, "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json" }
-  const entries = await FileManager.readDirectory(dir, true)
-  const files = entries.map((p: string) => p.startsWith("/") ? p : dir + "/" + p).filter((p: string) => FileManager.isFileSync(p)).map((p: string) => ({ absolute: p, path: p.slice((dir + "/").length) }))
-  for (const file of files) {
-    if (file.path.startsWith(".")) continue
-    const api = `https://api.github.com/repos/${remote[1]}/${remote[2]}/contents/${file.path.split("/").map(encodeURIComponent).join("/")}`
-    const current = await fetch(`${api}?ref=master`, { headers })
-    const data = Data.fromRawString(FileManager.readAsStringSync(file.absolute))
-    if (!data) throw new Error(`无法读取：${file.path}`)
-    const body: any = { message: "Update barcode generator", content: data.toBase64String(), branch: "master" }
-    if (current.ok) body.sha = (await current.json()).sha
-    const response = await fetch(api, { method: "PUT", headers, body: JSON.stringify(body) })
-    if (!response.ok) throw new Error(`${file.path}: HTTP ${response.status}`)
-  }
-}
 
 function View() {
   // 每个条码独立一行输入；扫描结果会按行追加到列表
@@ -201,16 +193,16 @@ function View() {
     setTimeout(() => setPressedKey(null), 300)
   }
 
-  // 相机扫描：每个识别结果独立成为一个输入框，追加到当前列表
+  // 相机文字识别：每个识别结果独立成为一个输入框，追加到当前列表
   async function scanInput(): Promise<boolean> {
     const texts = await scanTexts()
     if (texts === null) return false
-    setInputRows((prev) => [
-      ...prev.filter((s) => s.trim().length > 0),
-      ...texts,
-    ].slice(0, MAX_BARCODE_ITEMS))
-    if (texts.length > MAX_BARCODE_ITEMS) {
-      await alert(`扫描结果超过 ${MAX_BARCODE_ITEMS} 条，已只保留前 ${MAX_BARCODE_ITEMS} 条`)
+    const existing = inputRows.filter((text) => text.trim().length > 0)
+    const available = Math.max(0, MAX_BARCODE_ITEMS - existing.length)
+    const accepted = texts.slice(0, available)
+    setInputRows([...existing, ...accepted])
+    if (accepted.length < texts.length) {
+      await alert(`当前最多保留 ${MAX_BARCODE_ITEMS} 条，扫描结果有 ${texts.length - accepted.length} 条未加入`)
     }
     return true
   }
@@ -219,7 +211,7 @@ function View() {
     if (await scanInput()) selectHomeTab("generate")
   }
 
-  // 小组件“扫描填充”入口：通过 run URL 启动脚本后自动打开扫描
+  // 小组件“识别文字填充”入口：通过 run URL 启动脚本后自动打开识别
   useEffect(() => {
     const action = Script.queryParameters?.action
     if (action === "scan") {
@@ -284,18 +276,6 @@ function View() {
   }
 
   // 校验数量及各格式长度；固定长度格式的精确格式校验仍由编码器负责。
-  function validateTexts(texts: string[], type: BarcodeType): string | null {
-    if (texts.length > MAX_BARCODE_ITEMS) return `一次最多生成 ${MAX_BARCODE_ITEMS} 条条码`
-    const limit = maxTextLength(type)
-    const tooLong = texts.findIndex((text) => {
-      const value = ["ean13", "ean8", "upca", "itf14"].includes(type)
-        ? text.replace(/\s/g, "")
-        : text
-      return value.length > limit
-    })
-    return tooLong >= 0 ? `第 ${tooLong + 1} 条内容过长：${typeName(type)}最多支持 ${limit} 个字符` : null
-  }
-
   async function showGenerationFailure(reason: string) {
     await Dialog.actionSheet({
       title: "生成失败",
@@ -401,7 +381,7 @@ function View() {
     })
     if (!confirmed) return
     setHistory([])
-    Storage.remove(HISTORY_KEY)
+    saveHistory([])
   }
 
   function editFavorite(texts: string[], type: BarcodeType) {
@@ -422,9 +402,12 @@ function View() {
 
   // 收藏当前生成内容（总名称与文件夹由用户在弹窗自定义；允许相同内容重复收藏）
   // 收藏不单独保存样式，恢复和分享时统一使用当前全局样式。
-  async function addFavorite(name: string, folder: string) {
-    const texts = items.map((i) => i.text)
-    const sameName = favorites.find((f) => f.name === name && (f.type ?? "code128") === barcodeType)
+  async function addFavorite(name: string, folder: string, sourceItems: BarcodeItem[] = items) {
+    const depthError = validateFolderDepth(folder)
+    if (depthError) { void alert(depthError); return }
+    const texts = sourceItems.map((i) => i.text)
+    const sourceType = sourceItems[0]?.type ?? barcodeType
+    const sameName = favorites.find((f) => f.name === name && (f.type ?? "code128") === sourceType)
     if (sameName) {
       const choice = await Dialog.actionSheet({
         title: "覆盖收藏",
@@ -435,9 +418,10 @@ function View() {
       if (choice !== 0) return
     }
     const next = [
-      { id: sameName?.id ?? makeRowId(), name, texts, type: barcodeType, time: Date.now(), folder },
+      { id: sameName?.id ?? makeRowId(), name, texts, type: sourceType, time: Date.now(), folder },
       ...favorites.filter((f) => f.id !== sameName?.id),
     ]
+    if (!checkFolderPaths(next.map((favorite) => favorite.folder))) return
     setFavorites(next)
     saveFavorites(next)
   }
@@ -446,7 +430,11 @@ function View() {
     let archiveRoot: string | null = null
     let archivePath: string | null = null
     try {
-      const stamp = Date.now().toString(36)
+      for (const folder of [...folders, ...favorites.map((favorite) => favorite.folder)]) {
+        const error = validateFolderPath(folder)
+        if (error) throw new Error(error)
+      }
+      const stamp = makeRowId()
       archiveRoot = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}`
       archivePath = `${FileManager.temporaryDirectory}/barcode-generator-backup-${stamp}.zip`
       FileManager.createDirectorySync(`${archiveRoot}/favorites`, true)
@@ -472,7 +460,13 @@ function View() {
   }
 
   async function importBackup() {
-    const paths = await DocumentPicker.pickFiles()
+    let paths: string[] | null | undefined
+    try {
+      paths = await DocumentPicker.pickFiles()
+    } catch (error) {
+      await Dialog.alert({ title: "备份导入失败", message: error instanceof Error ? error.message : String(error) })
+      return
+    }
     if (!paths || paths.length === 0) return
     let extractedPath: string | null = null
     try {
@@ -480,6 +474,7 @@ function View() {
       if (typeof path !== "string" || !path.trim()) throw new Error("未选择有效的备份文件")
       let importedFolders: string[]
       let importedFavorites: FavoriteItem[]
+      let invalidFavoriteCount = 0
       function fromInterchange(parsed: InterchangeBackup) {
         const folders = interchangeFoldersToPaths(parsed)
         const favorites: FavoriteItem[] = parsed.favorites.map((favorite) => ({
@@ -495,7 +490,7 @@ function View() {
         }
       }
       if (path.toLowerCase().endsWith(".zip")) {
-        extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${Date.now().toString(36)}`
+        extractedPath = `${FileManager.temporaryDirectory}/barcode-generator-import-${makeRowId()}`
         FileManager.createDirectorySync(extractedPath, true)
         await FileManager.unzip(path, extractedPath)
         // 安卓备份的清单位于 ZIP 根目录。不同安卓版本使用两个合法文件名，
@@ -526,25 +521,44 @@ function View() {
           // 单条收藏 JSON 恢复，保留空文件夹和每个收藏文件的独立存储结构。
           const entries = FileManager.readDirectorySync(extractedPath, true)
             .map((entry: string) => entry.startsWith("/") ? entry : `${extractedPath}/${entry}`)
-          const archiveFolderPath = (entry: string): string => {
+          const archiveFolderPath = (entry: string, isDirectory: boolean): string | null => {
             const normalized = entry.replace(/\\/g, "/")
             const marker = "/favorites/"
             const markerIndex = normalized.indexOf(marker)
-            if (markerIndex < 0) return ""
+            if (markerIndex < 0) return null
             const parts = normalized.slice(markerIndex + marker.length).split("/").filter(Boolean)
-            return parts.length <= 2 ? parts.join("/") : ""
+            if (!isDirectory) parts.pop()
+            const folder = parts.join("/")
+            const depthError = validateFolderDepth(folder)
+            if (depthError) throw new Error(depthError)
+            return folder
           }
           const fileFavorites = entries
             .filter((entry: string) => FileManager.isFileSync(entry) && entry.toLowerCase().endsWith(".json"))
-            .filter((entry: string) => archiveFolderPath(entry.slice(0, entry.lastIndexOf("/"))) !== "" || entry.replace(/\\/g, "/").includes("/favorites/"))
             .map((entry: string) => {
-              try { return normalizeFavorite(JSON.parse(FileManager.readAsStringSync(entry).trim().replace(/^\uFEFF/, ""))) } catch { return null }
+              if (archiveFolderPath(entry, false) === null) return null
+              let parsed: any
+              try { parsed = JSON.parse(FileManager.readAsStringSync(entry).trim().replace(/^\uFEFF/, "")) } catch {
+                invalidFavoriteCount++
+                return null
+              }
+              if (typeof parsed?.folder === "string") {
+                const error = validateFolderPath(parsed.folder)
+                if (error) throw new Error(error)
+                const depthError = validateFolderDepth(parsed.folder)
+                if (depthError) throw new Error(depthError)
+              }
+              const favorite = normalizeFavorite(parsed)
+              if (!favorite && !(entry.replace(/\\/g, "/").endsWith("/index.json") && Array.isArray(parsed?.ids))) {
+                invalidFavoriteCount++
+              }
+              return favorite
             })
             .filter((favorite: FavoriteItem | null): favorite is FavoriteItem => favorite !== null)
           const folderPaths = entries
             .filter((entry: string) => FileManager.isDirectorySync(entry))
-            .map(archiveFolderPath)
-            .filter(Boolean)
+            .map((entry: string) => archiveFolderPath(entry, true))
+            .filter((folder: string | null): folder is string => folder !== null && folder !== "")
           importedFavorites = fileFavorites
           importedFolders = Array.from(new Set([...folderPaths, ...fileFavorites.map((favorite) => favorite.folder).filter(Boolean)]))
           if (importedFolders.length === 0 && importedFavorites.length === 0) throw new Error("压缩包中没有可导入的收藏文件或文件夹")
@@ -558,7 +572,7 @@ function View() {
       const mergedFavorites = [...favorites]
       let addedCount = 0
       let overwrittenCount = 0
-      let skippedCount = 0
+      let skippedCount = invalidFavoriteCount
       const duplicateNames = Array.from(new Set(importedFavorites
         .filter((imported) => mergedFavorites.some((existing) =>
           existing.name === imported.name &&
@@ -595,12 +609,30 @@ function View() {
         mergedFavorites.push(idConflict ? { ...imported, id: makeRowId() } : imported)
         addedCount++
       }
+      for (const folder of [...mergedFolders, ...mergedFavorites.map((favorite) => favorite.folder)]) {
+        const error = validateFolderPath(folder)
+        if (error) throw new Error(error)
+      }
       saveFolders(mergedFolders)
       saveFavorites(mergedFavorites)
       const savedFolders = loadFolders()
       const savedFavorites = loadFavorites()
-      if (savedFolders.length < mergedFolders.length || savedFavorites.length !== mergedFavorites.length) {
-        throw new Error(`备份保存校验失败：文件夹 ${savedFolders.length} 条，收藏 ${savedFavorites.length} 条`)
+      const expectedFolderPaths = new Set([
+        ...mergedFolders,
+        ...mergedFavorites.map((favorite) => favorite.folder).filter(Boolean),
+      ])
+      for (const folder of Array.from(expectedFolderPaths)) {
+        const parts = folder.split("/").filter(Boolean)
+        if (parts.length === 2) expectedFolderPaths.add(parts[0])
+      }
+      const foldersMatch =
+        new Set(savedFolders).size === savedFolders.length &&
+        mergedFolders.every((folder) => savedFolders.includes(folder)) &&
+        savedFolders.every((folder) => expectedFolderPaths.has(folder))
+      const favoritesMatch = favoriteListsMatch(savedFavorites, mergedFavorites)
+      if (!foldersMatch || !favoritesMatch) {
+        restoreFolderState(folders, favorites)
+        throw new Error("备份保存校验失败：保存内容与导入结果不一致")
       }
       setFolders(savedFolders)
       setFavorites(savedFavorites)
@@ -625,11 +657,13 @@ function View() {
       const source = favorites.find((f) => f.id === id)
       if (!source) return
       const next = favorites.filter((f) => f.id !== existing.id && f.id !== id).concat({ ...source, id: existing.id, name, time: Date.now() })
+      if (!checkFolderPaths(next.map((favorite) => favorite.folder))) return
       setFavorites(next)
       saveFavorites(next)
       return
     }
     const next = favorites.map((f) => f.id === id ? { ...f, name } : f)
+    if (!checkFolderPaths(next.map((favorite) => favorite.folder))) return
     setFavorites(next)
     saveFavorites(next)
   }
@@ -637,6 +671,7 @@ function View() {
   // 删除收藏
   function removeFavorite(id: string) {
     const next = favorites.filter((f) => f.id !== id)
+    if (!checkFolderPaths(next.map((favorite) => favorite.folder))) return
     setFavorites(next)
     saveFavorites(next)
   }
@@ -644,34 +679,52 @@ function View() {
   // 移动单条收藏到指定文件夹
   function moveFavorite(id: string, folder: string) {
     const source = favorites.find((f) => f.id === id)
+    const depthError = validateFolderDepth(folder)
+    if (depthError) { void alert(depthError); return }
     // 收藏文件可以从一级目录移动到其下的二级目录；只禁止移动到原目录。
     if (source && folder === (source.folder || "")) {
       void alert("不能将收藏移动到当前文件夹")
       return
     }
     const next = favorites.map((f) => f.id === id ? { ...f, folder } : f)
+    if (!checkFolderPaths(next.map((favorite) => favorite.folder))) return
     setFavorites(next)
     saveFavorites(next)
   }
 
   function createFolder(parentFolder: string, name: string) {
     const path = parentFolder ? `${parentFolder}/${name}` : name
+    const depthError = validateFolderDepth(path)
+    if (depthError) { void alert(depthError); return }
     const next = Array.from(new Set([...folders, path]))
-    setFolders(next)
+    if (!checkFolderPaths(next)) return
     saveFolders(next)
+    if (!folderPathsPersisted([path])) {
+      restoreFolderState(folders)
+      void alert("文件夹创建未能保存，已取消本次操作")
+      return
+    }
+    setFolders(next)
   }
 
   function deleteFolder(folder: string) {
     const prefix = `${folder}/`
+    const removedFolderPaths = folders.filter((path) => path === folder || path.startsWith(prefix))
     const nextFolders = folders.filter((f) => f !== folder && !f.startsWith(prefix))
     const nextFavorites = favorites.filter((f) => {
       const current = f.folder || ""
       return current !== folder && !current.startsWith(prefix)
     })
-    setFolders(Array.from(new Set(nextFolders)))
+    if (!checkFolderPaths([...nextFolders, ...nextFavorites.map((favorite) => favorite.folder)])) return
     saveFolders(nextFolders)
-    setFavorites(nextFavorites)
     saveFavorites(nextFavorites)
+    if (!folderPathsPersisted([], removedFolderPaths) || !favoritesPersisted(nextFavorites)) {
+      restoreFolderState(folders, favorites)
+      void alert("文件夹删除未能保存，已取消本次操作")
+      return
+    }
+    setFolders(Array.from(new Set(nextFolders)))
+    setFavorites(nextFavorites)
   }
 
   function moveFolder(folder: string, parentFolder: string) {
@@ -679,24 +732,47 @@ function View() {
       void alert("不能将文件夹移动到自身或子文件夹")
       return
     }
+    const folderName = folder.slice(folder.lastIndexOf("/") + 1)
+    const destination = parentFolder ? `${parentFolder}/${folderName}` : folderName
+    if (destination === folder) return
+    const knownPaths = [...folders, ...favorites.map((favorite) => favorite.folder || "")]
+    if (wouldExceedFolderDepthAfterMove(folder, parentFolder, knownPaths)) {
+      void alert(`文件夹最多支持 ${MAX_FOLDER_DEPTH} 级，请先移动或删除子文件夹`)
+      return
+    }
+    const movedFolderPaths = folders.filter((path) => path === folder || path.startsWith(`${folder}/`))
     const nextFolders = folders.map((f) => {
       if (f !== folder && !f.startsWith(`${folder}/`)) return f
       const suffix = f.slice(folder.length)
-      return parentFolder ? `${parentFolder}${suffix}` : suffix.replace(/^\/+/, "")
+      return `${destination}${suffix}`
     })
     const nextFavorites = favorites.map((f) => {
       const current = f.folder || ""
       if (current !== folder && !current.startsWith(`${folder}/`)) return f
       const suffix = current.slice(folder.length)
-      return { ...f, folder: parentFolder ? `${parentFolder}${suffix}` : suffix.replace(/^\/+/, "") }
+      return { ...f, folder: `${destination}${suffix}` }
     })
-    setFolders(Array.from(new Set(nextFolders)))
+    if (!checkFolderPaths([...nextFolders, ...nextFavorites.map((favorite) => favorite.folder)])) return
     saveFolders(nextFolders)
-    setFavorites(nextFavorites)
     saveFavorites(nextFavorites)
+    const movedDestinations = movedFolderPaths.map((path) => `${destination}${path.slice(folder.length)}`)
+    if (!folderPathsPersisted(movedDestinations, movedFolderPaths) || !favoritesPersisted(nextFavorites)) {
+      restoreFolderState(folders, favorites)
+      void alert("文件夹移动未能保存，已取消本次操作")
+      return
+    }
+    setFolders(Array.from(new Set(nextFolders)))
+    setFavorites(nextFavorites)
   }
 
   function renameFolder(oldFolder: string, newFolder: string) {
+    if (newFolder === oldFolder) return
+    if (!checkFolderPaths([newFolder])) return
+    const knownPaths = [...folders, ...favorites.map((favorite) => favorite.folder || "")]
+    if (wouldExceedFolderDepthAfterRename(oldFolder, newFolder, knownPaths)) {
+      void alert(`文件夹最多支持 ${MAX_FOLDER_DEPTH} 级，请先移动或删除子文件夹`)
+      return
+    }
     const next = favorites.map((f) => {
       const current = f.folder || ""
       return current === oldFolder || current.startsWith(`${oldFolder}/`)
@@ -708,10 +784,18 @@ function View() {
         ? `${newFolder}${f.slice(oldFolder.length)}`
         : f
     )
-    setFolders(nextFolders)
+    if (!checkFolderPaths([...nextFolders, ...next.map((favorite) => favorite.folder)])) return
+    const renamedFolderPaths = folders.filter((path) => path === oldFolder || path.startsWith(`${oldFolder}/`))
     saveFolders(nextFolders)
-    setFavorites(next)
     saveFavorites(next)
+    const renamedDestinations = renamedFolderPaths.map((path) => `${newFolder}${path.slice(oldFolder.length)}`)
+    if (!folderPathsPersisted(renamedDestinations, renamedFolderPaths) || !favoritesPersisted(next)) {
+      restoreFolderState(folders, favorites)
+      void alert("文件夹重命名未能保存，已取消本次操作")
+      return
+    }
+    setFolders(nextFolders)
+    setFavorites(next)
   }
 
 
@@ -866,8 +950,7 @@ function View() {
               </Text>
             </HStack>
           </VStack>
-          {/* 单个多行输入框（扫描表格后自动换行） */}
-                     {/* 逐行输入：扫描结果每条独立一行，可编辑、排序和删除 */}
+          {/* 逐行输入：识别的文字各占一行，可单独编辑、排序和删除。 */}
            <VStack alignment="leading" spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity' })}>
               <ScrollView modifiers={modifiers().frame({ maxWidth: 'infinity', maxHeight: 386 })}>
              {inputRows.map((row, index) => (
@@ -887,7 +970,7 @@ function View() {
               <HStack spacing={12} modifiers={modifiers().frame({ maxWidth: 'infinity' }).padding({ top: 6, bottom: 10 })}>
                 <Button title="+添加一行" action={addInputRow} modifiers={modifiers().offset({ x: 38, y: 0 }).font(16).fontWeight("medium").foregroundStyle("#3b82f6")} />
                 <Spacer />
-                <Button action={scanInput} modifiers={modifiers().offset({ x: -38, y: 0 }).font(16).fontWeight("medium").foregroundStyle("#3b82f6")}><HStack spacing={5}><Image systemName="viewfinder" renderingMode="template" modifiers={modifiers().font(16)} /><Text font={16} fontWeight="medium">扫描填充</Text></HStack></Button>
+                <Button action={scanInput} modifiers={modifiers().offset({ x: -38, y: 0 }).font(16).fontWeight("medium").foregroundStyle("#3b82f6")}><HStack spacing={5}><Image systemName="viewfinder" renderingMode="template" modifiers={modifiers().font(16)} /><Text font={16} fontWeight="medium">识别文字填充</Text></HStack></Button>
               </HStack>
            </VStack>
             <HStack alignment="center" spacing={10} modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 56, maxHeight: 56 }).padding({ leading: 16, trailing: 16 }).background({ style: cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}>
@@ -897,6 +980,7 @@ function View() {
                 {BARCODE_TYPES.map((t) => <Text tag={t.id}>{t.name}</Text>)}
               </Picker>
            </HStack>
+           <Text font={12} modifiers={modifiers().frame({ maxWidth: "infinity", alignment: "leading" }).padding({ leading: 6, trailing: 6 }).foregroundStyle(sub(colorScheme))}>{barcodeTypeHint(barcodeType)}</Text>
            <Button action={() => { if (hasInput) generate() }} modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 56, maxHeight: 56, alignment: 'center' }).padding({ leading: 16, trailing: 16 }).font(18).fontWeight("bold").foregroundStyle(hasInput ? "#ffffff" : sub(colorScheme)).background({ style: hasInput ? "#3b82f6" : (colorScheme === "dark" ? "rgba(90,110,145,0.42)" : "rgba(59,130,246,0.14)"), shape: { type: "rect", cornerRadius: 16 } }).contentShape({ type: "rect", cornerRadius: 16 })}><HStack modifiers={modifiers().frame({ maxWidth: 'infinity', minHeight: 56, maxHeight: 56, alignment: 'center' })}><Spacer /><Text font={18} fontWeight="bold">生成条码</Text><Spacer /></HStack></Button>
            {/* 每个输入框已经代表一条独立条码 */}
          </VStack>
@@ -981,7 +1065,7 @@ function View() {
                       contextMenu={tab === "generate" ? {
                         menuItems: (
                           <Group>
-                            <Button title="扫描填充" systemImage="viewfinder" action={() => { void scanFromGenerateTab() }} />
+                            <Button title="识别文字填充" systemImage="viewfinder" action={() => { void scanFromGenerateTab() }} />
                           </Group>
                         ),
                       } : tab === "favorites" ? {

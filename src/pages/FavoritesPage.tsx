@@ -1,19 +1,13 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Group, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
 import { FavoriteItem } from "../storage"
+import { MAX_FOLDER_DEPTH, folderPathDepth, validateFolderDepth, validateTexts, wouldExceedFolderDepthAfterMove } from "../validation"
 declare const Dialog: any
 async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
 }
-import { PresentedBarcodes } from "./BarcodesPage"
+import { PresentedBarcodes, formatFavoriteTime } from "./BarcodesPage"
 import { CS, schemeProps, lab, sub, ter, cardB, inputT, FullScreenBg } from "../theme"
-
-function formatFavoriteTime(time: number | undefined): string {
-  if (typeof time !== "number" || !Number.isFinite(time)) return ""
-  const d = new Date(time), now = new Date(), pad = (n: number) => String(n).padStart(2, "0")
-  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate() ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`
-}
 
 // 收藏页：支持搜索与文件夹分组；点按收藏名称打开条码，长按文件夹或收藏名称打开原生管理菜单。
 export function FavoritesPage({
@@ -121,17 +115,31 @@ export function FavoritesPage({
 
   async function moveFolder(folder: string) {
     if (!folder) return
-    const candidates = ["根目录", ...folders.filter((target) =>
-      target !== folder && !target.startsWith(`${folder}/`)
-    )]
+    const folderName = folder.slice(folder.lastIndexOf("/") + 1)
+    const knownPaths = [...folders, ...favorites.map((favorite) => favorite.folder || "")]
+    const candidates = [
+      { label: "根目录", parentFolder: "" },
+      ...folders
+        .filter((target) => target !== folder && !target.startsWith(`${folder}/`))
+        .map((target) => ({ label: target, parentFolder: target })),
+    ].filter(({ parentFolder }) => {
+      const destination = parentFolder ? `${parentFolder}/${folderName}` : folderName
+      return destination !== folder && !wouldExceedFolderDepthAfterMove(folder, parentFolder, knownPaths)
+    })
+    if (candidates.length === 0) {
+      await alert(`文件夹最多支持 ${MAX_FOLDER_DEPTH} 级，请先移动或删除子文件夹`)
+      return
+    }
     const choice = await Dialog.actionSheet({
       title: `移动「${folder}」`,
       message: "请选择目标文件夹",
       cancelButton: true,
-      actions: candidates.map((target) => ({ label: target })),
+      actions: candidates.map((candidate) => ({ label: candidate.label })),
     })
     if (choice === null || choice === undefined) return
-    onMoveFolder(folder, candidates[choice] === "根目录" ? "" : candidates[choice])
+    const selected = candidates[choice]
+    if (!selected) return
+    onMoveFolder(folder, selected.parentFolder)
   }
 
   // 编辑收藏名称
@@ -165,7 +173,7 @@ export function FavoritesPage({
     })))
     // 当前目录及其子目录需要保留在导航树中，才能从一级目录进入二级目录。
     // 具体是否允许作为目标，在“移动到此文件夹”选项处单独判断。
-    const navigationFolders = allFolders
+    const navigationFolders = allFolders.filter((path) => folderPathDepth(path) <= MAX_FOLDER_DEPTH)
     async function chooseLevel(parent: string): Promise<string | null> {
       const children = navigationFolders.filter((folder) => {
         const parts = folder.split("/")
@@ -203,7 +211,9 @@ export function FavoritesPage({
         if (!folder) return []
         const parts = folder.split("/")
         return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
-      }))).sort()
+      })))
+        .filter((folder) => folderPathDepth(folder) < MAX_FOLDER_DEPTH)
+        .sort()
       const parentChoice = await Dialog.actionSheet({
         title: "选择新文件夹位置",
         message: "可选择根目录或已有文件夹",
@@ -226,6 +236,8 @@ export function FavoritesPage({
         return
       }
       const newFolderPath = parentFolder ? `${parentFolder}/${trimmed}` : trimmed
+      const depthError = validateFolderDepth(newFolderPath)
+      if (depthError) { await alert(depthError); return }
       onCreateFolder(parentFolder, trimmed)
       onMoveFavorite(fav.id, newFolderPath)
     } else {
@@ -341,6 +353,11 @@ export function FavoritesPage({
 
   // 点击收藏：交给 NavigationStack 推入原生导航页，系统会提供返回按钮和侧滑返回。
   async function selectFavorite(fav: FavoriteItem) {
+    const validationError = validateTexts(fav.texts, fav.type)
+    if (validationError) {
+      await alert(validationError)
+      return
+    }
     const barcodeItems = await buildItems(fav.texts, fav.type)
     setSelectedFavorite({ favorite: fav, items: barcodeItems })
   }

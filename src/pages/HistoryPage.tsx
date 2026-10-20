@@ -1,14 +1,10 @@
 import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, modifiers, useState } from "scripting"
 import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
 import { HistoryItem, FavoriteItem } from "../storage"
-import { PresentedBarcodes } from "./BarcodesPage"
+import { validateTexts } from "../validation"
+import { PresentedBarcodes, formatHistoryTime } from "./BarcodesPage"
 import { CS, schemeProps, lab, sub, cardB, FullScreenBg } from "../theme"
-
-function formatHistoryTime(time: number): string {
-  const d = new Date(time), now = new Date(), pad = (n: number) => String(n).padStart(2, "0")
-  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate() ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`
-}
+declare const Dialog: any
 // 历史记录页：展示最近生成列表，点击条目进入条码页查看
 export function HistoryPage({
   history,
@@ -39,6 +35,11 @@ export function HistoryPage({
 
   // 点击历史条目：交给 NavigationStack 推入原生导航页。
   async function selectHistory(item: HistoryItem) {
+    const validationError = validateTexts(item.texts, item.type)
+    if (validationError) {
+      await Dialog.alert({ message: validationError })
+      return
+    }
     const barcodeItems = await buildItems(item.texts, item.type)
     setSelectedHistory({ item, items: barcodeItems })
   }

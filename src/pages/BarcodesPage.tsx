@@ -1,7 +1,8 @@
 import { Navigation, ScrollView, VStack, HStack, Text, Spacer, Button, Image, ZStack, modifiers, ImageRenderer, useState } from "scripting"
-import { BarcodeCanvas, BarcodeItem, typeName, StyleSettings, isBarcodeScanDense } from "../barcode_core"
+import { BarcodeCanvas, BarcodeItem, humanReadableBarcodeText, typeName, StyleSettings, isBarcodeScanDense } from "../barcode_core"
 import { FavoriteItem } from "../storage"
 import { HistoryItem } from "../storage"
+import { MAX_FOLDER_DEPTH, folderPathDepth, validateFolderDepth } from "../validation"
 declare const Dialog: any
 async function alert(message: string): Promise<void> {
   await Dialog.alert({ message })
@@ -39,7 +40,7 @@ export function BarcodesPage({
   favorites: FavoriteItem[]
   folders?: string[]
   onClose: () => void
-  onFavorite: (name: string, folder: string) => void
+  onFavorite: (name: string, folder: string, sourceItems?: BarcodeItem[]) => void
   onCreateFolder?: (parentFolder: string, name: string) => void
   onUnfavorite?: () => void
   onEdit?: () => void
@@ -115,12 +116,12 @@ export function BarcodesPage({
     )
   }
 
-  // 按设置渲染条码下方的内容文字
+  // 显示条码实际编码值，固定长度码制包含计算后的校验位
   function renderText(item: BarcodeItem, textColor?: any) {
     if (!itemOk(item)) return null
     return (
       <Text font={settings.textSize} modifiers={modifiers().foregroundStyle(textColor ?? lab(colorScheme))}>
-        {item.text}
+        {humanReadableBarcodeText(item.type, item.text)}
       </Text>
     )
   }
@@ -133,7 +134,7 @@ export function BarcodesPage({
       if (!folder) return []
       const parts = folder.split("/")
       return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
-    })))
+    }))).filter((path) => folderPathDepth(path) <= MAX_FOLDER_DEPTH)
     async function createFolder(parent: string): Promise<string | null> {
       const name = await Dialog.prompt({
         title: parent ? `在「${parent}」中新建文件夹` : "新建文件夹",
@@ -148,8 +149,11 @@ export function BarcodesPage({
         alert("文件夹名称不能为空")
         return null
       }
+      const folderPath = parent ? `${parent}/${trimmed}` : trimmed
+      const depthError = validateFolderDepth(folderPath)
+      if (depthError) { await alert(depthError); return null }
       if (onCreateFolder) onCreateFolder(parent, trimmed)
-      return parent ? `${parent}/${trimmed}` : trimmed
+      return folderPath
     }
     async function chooseFolder(parent: string): Promise<string | null> {
       const children = folderPaths.filter((path) => {
@@ -158,7 +162,7 @@ export function BarcodesPage({
           (parent ? path.startsWith(`${parent}/`) : true)
       }).sort()
       const labels = parent
-        ? ["选择此文件夹", ...children.map((path) => path.split("/").pop() || path), "新建文件夹", "返回"]
+        ? ["选择此文件夹", ...children.map((path) => path.split("/").pop() || path), ...(folderPathDepth(parent) < MAX_FOLDER_DEPTH ? ["新建文件夹"] : []), "返回"]
         : [...children.map((path) => path.split("/").pop() || path), "新建文件夹"]
       const choice = await Dialog.actionSheet({
         title: parent || "选择文件夹",
@@ -197,7 +201,7 @@ export function BarcodesPage({
       alert("收藏名称不能为空")
       return
     }
-    onFavorite(trimmedName, folder)
+    onFavorite(trimmedName, folder, items)
   }
 
   async function shareImage() {
@@ -295,8 +299,8 @@ export function BarcodesPage({
   )
 }
 
-// 历史时间格式化：今天显示 HH:mm，否则 MM/DD HH:mm（模块级，供 HistoryPage 使用）
-function formatHistoryTime(time: number): string {
+// 时间格式化：今天显示 HH:mm，否则 M/D HH:mm；供历史、收藏和结果页共用。
+export function formatHistoryTime(time: number): string {
   const d = new Date(time)
   const now = new Date()
   const pad = (n: number) => String(n).padStart(2, "0")
@@ -311,7 +315,7 @@ function formatHistoryTime(time: number): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
 }
 
-function formatFavoriteTime(time: number | undefined): string {
+export function formatFavoriteTime(time: number | undefined): string {
   return typeof time === "number" && Number.isFinite(time)
     ? formatHistoryTime(time)
     : ""
@@ -336,7 +340,7 @@ export function PresentedBarcodes({
   settings: StyleSettings
   favorites: FavoriteItem[]
   folders?: string[]
-  onFavorite: (name: string, folder: string) => void
+  onFavorite: (name: string, folder: string, sourceItems?: BarcodeItem[]) => void
   onCreateFolder?: (parentFolder: string, name: string) => void
   onUnfavorite?: () => void
   onEdit?: () => void
