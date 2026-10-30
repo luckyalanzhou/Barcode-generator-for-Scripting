@@ -1,0 +1,471 @@
+import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, TextField, Group, modifiers, useState } from "scripting"
+import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
+import { FavoriteItem } from "../storage"
+import { MAX_FOLDER_DEPTH, folderPathDepth, validateFolderDepth, validateTexts, wouldExceedFolderDepthAfterMove } from "../validation"
+declare const Dialog: any
+async function alert(message: string): Promise<void> {
+  await Dialog.alert({ message })
+}
+import { PresentedBarcodes, formatFavoriteTime } from "./BarcodesPage"
+import { CS, schemeProps, lab, sub, ter, cardB, inputT, FullScreenBg } from "../theme"
+
+// 收藏页：支持搜索与文件夹分组；点按收藏名称打开条码，长按文件夹或收藏名称打开原生管理菜单。
+export function FavoritesPage({
+  favorites,
+  colorScheme,
+  settings,
+  barcodeType,
+  buildItems,
+  onFavorite,
+  onClose,
+  onRemove,
+  onRenameFolder,
+  onCreateFolder,
+  onDeleteFolder,
+  onMoveFolder,
+  folders,
+  onRenameFavorite,
+  onMoveFavorite,
+  onEdit,
+}: {
+  favorites: FavoriteItem[]
+  colorScheme: "system" | "light" | "dark"
+  settings: StyleSettings
+  barcodeType: BarcodeType
+  buildItems: (texts: string[], type: BarcodeType) => Promise<BarcodeItem[]>
+  onFavorite: (name: string, folder: string) => void
+  onClose: () => void
+  onRemove: (id: string) => void
+  onRenameFolder: (oldFolder: string, newFolder: string) => void
+  onCreateFolder: (parentFolder: string, name: string) => void
+  onDeleteFolder: (folder: string) => void
+  onMoveFolder: (folder: string, parentFolder: string) => void
+  folders: string[]
+  onRenameFavorite: (id: string, name: string) => void
+  onMoveFavorite: (id: string, folder: string) => void
+  onEdit: (texts: string[], type: BarcodeType) => void
+}) {
+  // 收藏搜索关键字（空表示不筛选）；页面级状态，关闭时重置
+  const [favoriteQuery, setFavoriteQuery] = useState("")
+  const [selectedFavorite, setSelectedFavorite] = useState<{ favorite: FavoriteItem; items: BarcodeItem[] } | null>(null)
+  // 默认折叠所有已有文件夹，用户可点击箭头展开
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    () => new Set([
+      ...folders,
+      ...favorites.map((f) => f.folder || ""),
+    ].filter((folder) => folder.length > 0))
+  )
+  function toggleFolder(folder: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(folder)) next.delete(folder)
+      else next.add(folder)
+      return next
+    })
+  }
+  // 重命名文件夹：弹窗输入新文件夹名；未分类("")重命名会把未分类收藏归入该文件夹
+  async function editFolder(folder: string) {
+    const isUncat = folder === ""
+    const newName = await Dialog.prompt({
+      title: "重命名文件夹",
+      message: isUncat
+        ? "把「未分类」的收藏归入新文件夹"
+        : `将文件夹「${folder}」重命名为`,
+      defaultValue: isUncat ? "" : folder,
+      placeholder: "新文件夹名称",
+      confirmLabel: "保存",
+      cancelLabel: "取消",
+    })
+    if (newName === null) return
+    const trimmed = newName.trim()
+    if (trimmed.length === 0) {
+      alert("文件夹名称不能为空")
+      return
+    }
+    if (!isUncat && trimmed === folder) return // 名称未变化
+    onRenameFolder(folder, trimmed)
+  }
+  async function createSubfolder(folder: string) {
+    const name = await Dialog.prompt({
+      title: folder ? `在「${folder}」下新建文件夹` : "新建文件夹",
+      message: "请输入文件夹名称",
+      placeholder: "文件夹名称",
+      confirmLabel: "创建",
+      cancelLabel: "取消",
+    })
+    if (name === null) return
+    const trimmed = name.trim().replace(/[\\/]+/g, "")
+    if (trimmed.length === 0) {
+      alert("文件夹名称不能为空")
+      return
+    }
+    onCreateFolder(folder, trimmed)
+  }
+
+  async function deleteFolder(folder: string) {
+    if (!folder) return
+    const confirm = await Dialog.actionSheet({
+      title: `删除「${folder}」`,
+      message: `其中包含 ${favorites.filter((f) => (f.folder || "") === folder || (f.folder || "").startsWith(`${folder}/`)).length} 条收藏，删除后将无法恢复。确定继续吗？`,
+      cancelButton: true,
+      actions: [{ label: "删除文件夹", destructive: true }],
+    })
+    if (confirm === 0) onDeleteFolder(folder)
+  }
+
+  async function moveFolder(folder: string) {
+    if (!folder) return
+    const folderName = folder.slice(folder.lastIndexOf("/") + 1)
+    const knownPaths = [...folders, ...favorites.map((favorite) => favorite.folder || "")]
+    const candidates = [
+      { label: "根目录", parentFolder: "" },
+      ...folders
+        .filter((target) => target !== folder && !target.startsWith(`${folder}/`))
+        .map((target) => ({ label: target, parentFolder: target })),
+    ].filter(({ parentFolder }) => {
+      const destination = parentFolder ? `${parentFolder}/${folderName}` : folderName
+      return destination !== folder && !wouldExceedFolderDepthAfterMove(folder, parentFolder, knownPaths)
+    })
+    if (candidates.length === 0) {
+      await alert(`文件夹最多支持 ${MAX_FOLDER_DEPTH} 级，请先移动或删除子文件夹`)
+      return
+    }
+    const choice = await Dialog.actionSheet({
+      title: `移动「${folder}」`,
+      message: "请选择目标文件夹",
+      cancelButton: true,
+      actions: candidates.map((candidate) => ({ label: candidate.label })),
+    })
+    if (choice === null || choice === undefined) return
+    const selected = candidates[choice]
+    if (!selected) return
+    onMoveFolder(folder, selected.parentFolder)
+  }
+
+  // 编辑收藏名称
+  async function editFavoriteName(fav: FavoriteItem) {
+    const newName = await Dialog.prompt({
+      title: "编辑收藏名称",
+      message: "请输入新的收藏名称",
+      defaultValue: fav.name,
+      placeholder: "收藏名称",
+      confirmLabel: "保存",
+      cancelLabel: "取消",
+    })
+    if (newName === null) return
+    const trimmed = newName.trim()
+    if (trimmed.length === 0) {
+      alert("收藏名称不能为空")
+      return
+    }
+    if (trimmed === fav.name) return
+    onRenameFavorite(fav.id, trimmed)
+  }
+
+  async function chooseMoveFolder(currentFolder: string): Promise<string | null> {
+    const allFolders = Array.from(new Set([
+      ...folders,
+      ...favorites.map((f) => f.folder || ""),
+    ].flatMap((folder) => {
+      if (!folder) return []
+      const parts = folder.split("/")
+      return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+    })))
+    // 当前目录及其子目录需要保留在导航树中，才能从一级目录进入二级目录。
+    // 具体是否允许作为目标，在“移动到此文件夹”选项处单独判断。
+    const navigationFolders = allFolders.filter((path) => folderPathDepth(path) <= MAX_FOLDER_DEPTH)
+    async function chooseLevel(parent: string): Promise<string | null> {
+      const children = navigationFolders.filter((folder) => {
+        const parts = folder.split("/")
+        return parts.length === (parent ? parent.split("/").length + 1 : 1) &&
+          (parent ? folder.startsWith(`${parent}/`) : true)
+      }).sort()
+      const canMoveToParent = parent !== "" && parent !== currentFolder
+      const labels = parent
+        ? [...(canMoveToParent ? ["移动到此文件夹"] : []), ...children.map((f) => f.split("/").pop() || f), "返回"]
+        : [...children.map((f) => f.split("/").pop() || f), "添加文件夹"]
+      const choice = await Dialog.actionSheet({ title: parent || "选择目标文件夹", cancelButton: true, actions: labels.map((label) => ({ label })) })
+      if (choice === null || choice === undefined) return null
+      if (canMoveToParent && choice === 0) return parent
+      if (labels[choice] === "返回") return null
+      
+      if (!parent && labels[choice] === "添加文件夹") return "__create__"
+      const childOffset = canMoveToParent ? 1 : 0
+      const selected = children[parent ? choice - childOffset : choice]
+      if (!selected) return null
+      const selectedDepth = selected.split("/").length
+       const hasChildren = navigationFolders.some((folder) => folder.startsWith(`${selected}/`) && folder.split("/").length === selectedDepth + 1)
+       return hasChildren ? ((await chooseLevel(selected)) ?? null) : selected
+    }
+    return chooseLevel("")
+  }
+
+  async function moveFavoriteToFolder(fav: FavoriteItem) {
+    const selected = await chooseMoveFolder(fav.folder || "")
+    if (selected === null) return
+    if (selected === "__create__") {
+      const folderCandidates = Array.from(new Set([
+        ...folders,
+        ...favorites.map((item) => item.folder || ""),
+      ].flatMap((folder) => {
+        if (!folder) return []
+        const parts = folder.split("/")
+        return parts.map((_, index) => parts.slice(0, index + 1).join("/"))
+      })))
+        .filter((folder) => folderPathDepth(folder) < MAX_FOLDER_DEPTH)
+        .sort()
+      const parentChoice = await Dialog.actionSheet({
+        title: "选择新文件夹位置",
+        message: "可选择根目录或已有文件夹",
+        cancelButton: true,
+        actions: [{ label: "根目录" }, ...folderCandidates.map((folder) => ({ label: folder }))],
+      })
+      if (parentChoice === null || parentChoice === undefined) return
+      const parentFolder = parentChoice === 0 ? "" : folderCandidates[parentChoice - 1]
+      const newFolder = await Dialog.prompt({
+        title: "添加文件夹",
+        message: "请输入新的文件夹名称",
+        placeholder: "文件夹名称",
+        confirmLabel: "保存",
+        cancelLabel: "取消",
+      })
+      if (newFolder === null) return
+      const trimmed = newFolder.trim().replace(/[\\/]+/g, "")
+      if (trimmed.length === 0) {
+        alert("文件夹名称不能为空")
+        return
+      }
+      const newFolderPath = parentFolder ? `${parentFolder}/${trimmed}` : trimmed
+      const depthError = validateFolderDepth(newFolderPath)
+      if (depthError) { await alert(depthError); return }
+      onCreateFolder(parentFolder, trimmed)
+      onMoveFavorite(fav.id, newFolderPath)
+    } else {
+      onMoveFavorite(fav.id, selected)
+    }
+  }
+
+  async function deleteFavorite(fav: FavoriteItem) {
+    const confirm = await Dialog.actionSheet({
+      title: "删除收藏",
+      message: `确定删除「${fav.name}」吗？`,
+      cancelButton: true,
+      actions: [{ label: "删除", destructive: true }],
+    })
+    if (confirm === 0) onRemove(fav.id)
+  }
+
+
+  const folderNames = Array.from(new Set(folders.filter((f) => f.trim().length > 0)))
+
+  const filteredFavorites = favoriteQuery.trim().length === 0
+    ? favorites
+    : favorites.filter((f) => {
+        const q = favoriteQuery.trim().toLowerCase()
+        return (
+          f.name.toLowerCase().includes(q) ||
+          (f.folder || "").toLowerCase().includes(q) ||
+          f.texts.some((t) => t.toLowerCase().includes(q))
+        )
+      })
+
+  const allFolderNames = Array.from(new Set([...folderNames, ...filteredFavorites.map((f) => f.folder || "")]))
+  const visibleFolderSet = new Set<string>([""])
+  allFolderNames.filter((f) => f !== "").forEach((folder) => {
+    const parts = folder.split("/")
+    parts.forEach((_, index) => visibleFolderSet.add(parts.slice(0, index + 1).join("/")))
+  })
+  const visibleFolders = Array.from(visibleFolderSet)
+  const childFolders = (parent: string) => visibleFolders.filter((folder) => {
+    if (!parent || !folder) return false
+    const parts = folder.split("/")
+    return parts.length === parent.split("/").length + 1 && folder.startsWith(`${parent}/`)
+  }).sort()
+  function isFolderCollapsed(folder: string): boolean {
+    if (favoriteQuery.trim().length > 0) {
+      const q = favoriteQuery.trim().toLowerCase()
+      const folderMatches = folder.toLowerCase().includes(q)
+      const hasMatchingItem = filteredFavorites.some((fav) => {
+        const path = fav.folder || ""
+        return path === folder || path.startsWith(`${folder}/`)
+      })
+      if (folderMatches || hasMatchingItem) return false
+    }
+    return collapsedFolders.has(folder)
+  }
+
+  function isFolderSearchMatch(folder: string): boolean {
+    const q = favoriteQuery.trim().toLowerCase()
+    return q.length > 0 && folder.toLowerCase().includes(q)
+  }
+  function isFavoriteSearchMatch(fav: FavoriteItem): boolean {
+    const q = favoriteQuery.trim().toLowerCase()
+    return q.length > 0 && (
+      fav.name.toLowerCase().includes(q) ||
+      (fav.folder || "").toLowerCase().includes(q) ||
+      fav.texts.some((text) => text.toLowerCase().includes(q))
+    )
+  }
+
+  const renderFolder = (folder: string, depth: number): any => {
+    const groupItems = filteredFavorites.filter((f) => (f.folder || "") === folder)
+    const children = childFolders(folder)
+    const displayName = folder ? folder.split("/").pop() || folder : "未分类"
+    return (
+      <VStack key={folder || "__uncategorized"} alignment="center" spacing={6} modifiers={modifiers().padding({ leading: depth * 14 })}>
+        <HStack alignment="center" spacing={depth === 0 ? 8 : 6} modifiers={modifiers().frame({ maxWidth: 'infinity', height: depth === 0 ? 52 : 44, alignment: 'center' }).padding(2).background({ style: isFolderSearchMatch(folder) ? "rgba(250, 204, 21, 0.20)" : "clear", shape: { type: "rect", cornerRadius: 12 } })}>
+          <Button
+            action={() => toggleFolder(folder)}
+            contextMenu={{
+              menuItems: (
+                <Group>
+                  {folder.split("/").length === 1 && <Button title="新建文件夹" systemImage="folder.badge.plus" action={() => { void createSubfolder(folder) }} />}
+                  <Button title={folder ? "重命名" : "归入文件夹"} systemImage="pencil" action={() => { void editFolder(folder) }} />
+                  {folder !== "" && <Button title="移动文件夹" systemImage="folder" action={() => { void moveFolder(folder) }} />}
+                  {folder !== "" && <Button title="删除文件夹" systemImage="trash" role="destructive" action={() => { void deleteFolder(folder) }} />}
+                </Group>
+              ),
+            }}
+            modifiers={modifiers().frame({ maxWidth: 'infinity' })}
+          >
+            <HStack alignment="center" spacing={depth === 0 ? 8 : 6}><Image systemName={folder === "" ? "folder" : "folder.fill"} renderingMode="template" modifiers={modifiers().font(depth === 0 ? 20 : 18).foregroundStyle(sub(colorScheme))} /><Text font={depth === 0 ? 16 : 14} fontWeight="semibold" modifiers={modifiers().foregroundStyle(depth === 0 ? "#3b82f6" : "#8b5cf6")}>{displayName}</Text><Spacer /><Text font={12} modifiers={modifiers().foregroundStyle(sub(colorScheme))}>{depth === 0 ? (groupItems.length > 0 ? `${groupItems.length}项${children.length > 0 ? ` · ${children.length}个文件夹` : ""}` : children.length > 0 ? `${children.length}个文件夹` : "") : `${groupItems.length}项`}</Text><Image systemName={isFolderCollapsed(folder) ? "chevron.right" : "chevron.down"} renderingMode="template" modifiers={modifiers().font(depth === 0 ? 20 : 18).foregroundStyle(ter(colorScheme))} /></HStack>
+          </Button>
+        </HStack>
+        {!isFolderCollapsed(folder) && <>{groupItems.map((fav) => <HStack key={fav.id} alignment="center" spacing={8} modifiers={modifiers().frame({ maxWidth: 'infinity', height: 36, alignment: 'center' }).padding({ top: 4, bottom: 4, leading: 8, trailing: 8 }).background({ style: isFavoriteSearchMatch(fav) ? "rgba(250, 204, 21, 0.24)" : cardB(colorScheme), shape: { type: "rect", cornerRadius: 16 } })}><Button
+          action={() => { void selectFavorite(fav) }}
+          contextMenu={{
+            menuItems: (
+              <Group>
+                <Button title="重命名" systemImage="pencil" action={() => { void editFavoriteName(fav) }} />
+                <Button title="移动到文件夹" systemImage="folder" action={() => { void moveFavoriteToFolder(fav) }} />
+                <Button title="删除" systemImage="trash" role="destructive" action={() => { void deleteFavorite(fav) }} />
+              </Group>
+            ),
+          }}
+          modifiers={modifiers().frame({ maxWidth: 'infinity' })}
+        ><Text font={16} fontWeight="bold" modifiers={modifiers().foregroundStyle(lab(colorScheme)).frame({ maxWidth: 'infinity', alignment: 'leading' })}>{fav.name}</Text></Button>{typeof fav.time === "number" && Number.isFinite(fav.time) && <Text font={11} modifiers={modifiers().lineLimit(1).foregroundStyle(sub(colorScheme))}>{formatFavoriteTime(fav.time)}</Text>}</HStack>)}{children.map((child) => renderFolder(child, depth + 1))}</>}
+      </VStack>
+    )
+  }
+  const rootFolders = visibleFolders.filter((folder) =>
+    folder ? !folder.includes("/") : filteredFavorites.some((fav) => !(fav.folder || ""))
+  )
+
+  // 点击收藏：交给 NavigationStack 推入原生导航页，系统会提供返回按钮和侧滑返回。
+  async function selectFavorite(fav: FavoriteItem) {
+    const validationError = validateTexts(fav.texts, fav.type)
+    if (validationError) {
+      await alert(validationError)
+      return
+    }
+    const barcodeItems = await buildItems(fav.texts, fav.type)
+    setSelectedFavorite({ favorite: fav, items: barcodeItems })
+  }
+
+  return (
+    <FullScreenBg cs={colorScheme}>
+    <ScrollView
+      {...schemeProps(colorScheme)} modifiers={modifiers()
+        .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
+        .navigationDestination({
+          isPresented: selectedFavorite != null,
+          onChanged: (value: boolean) => {
+            if (!value) setSelectedFavorite(null)
+          },
+          content: selectedFavorite ? (
+            <PresentedBarcodes
+              items={selectedFavorite.items}
+              settings={settings}
+              favorites={favorites}
+              folders={folders}
+              onFavorite={onFavorite}
+              onCreateFolder={onCreateFolder}
+              onUnfavorite={() => onRemove(selectedFavorite.favorite.id)}
+              onEdit={() => onEdit(selectedFavorite.favorite.texts, selectedFavorite.favorite.type)}
+              showCustomBack={false}
+            />
+          ) : <Text />,
+        })}
+    >
+      <VStack alignment="center" spacing={8} padding={16}>
+        <Text
+          font={24}
+          fontWeight="bold"
+          modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'center' }).padding({ top: 4, bottom: 4 }).foregroundStyle(lab(colorScheme))}
+        >
+          收藏
+        </Text>
+        {favorites.length === 0 ? (
+          <Text
+            font={16}
+            modifiers={modifiers()
+              .foregroundStyle(sub(colorScheme))
+              .padding({ top: 60 })}
+          >
+            暂无收藏
+          </Text>
+        ) : (
+          <>
+            {/* 收藏搜索框：按名称/文件夹/内容过滤 */}
+            <HStack
+              alignment="center"
+              spacing={8}
+              modifiers={modifiers()
+                .frame({ maxWidth: 'infinity', height: 56, alignment: 'center' })
+                .padding({ leading: 8, trailing: 8 })
+                .background({
+                  style: cardB(colorScheme),
+                  shape: { type: "rect", cornerRadius: 16 },
+                })}
+            >
+              <Image
+                systemName="magnifyingglass"
+                renderingMode="template"
+                modifiers={modifiers().foregroundStyle(sub(colorScheme))}
+              />
+              <TextField
+                title="搜索收藏"
+                prompt="搜索名称、文件夹或内容"
+                value={favoriteQuery}
+                onChanged={setFavoriteQuery}
+                submitLabel="search"
+                onSubmit={() => Keyboard.hide()}
+                modifiers={modifiers()
+                  .frame({ maxWidth: 'infinity', height: 40, alignment: 'center' })
+                  .font(16)
+                  .foregroundStyle(inputT(colorScheme))
+                  .padding(4)}
+              />
+              {favoriteQuery.length > 0 && (
+                <Button
+                  title="✕"
+                  action={() => setFavoriteQuery("")}
+                  modifiers={modifiers()
+                    .frame({ width: 28, height: 28, alignment: 'center' })
+                    .padding(0)
+                    .font(14)
+                    .foregroundStyle(sub(colorScheme))
+                    .background({
+                      style: "rgba(128, 128, 128, 0.25)",
+                      shape: "circle",
+                    })}
+                />
+              )}
+            </HStack>
+            {filteredFavorites.length === 0 ? (
+              <Text
+                font={14}
+                modifiers={modifiers().foregroundStyle(sub(colorScheme))}
+              >
+                没有匹配的收藏
+              </Text>
+            ) : (
+              rootFolders.map((folder) => renderFolder(folder, 0))
+            )}
+          </>
+        )}
+      </VStack>
+    </ScrollView>
+    </FullScreenBg>
+  )
+}

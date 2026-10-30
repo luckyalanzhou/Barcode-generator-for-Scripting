@@ -1,0 +1,148 @@
+import { ScrollView, VStack, HStack, Text, Spacer, Button, Image, modifiers, useState } from "scripting"
+import { BarcodeItem, BarcodeType, StyleSettings } from "../barcode_core"
+import { HistoryItem, FavoriteItem } from "../storage"
+import { validateTexts } from "../validation"
+import { PresentedBarcodes, formatHistoryTime } from "./BarcodesPage"
+import { CS, schemeProps, lab, sub, cardB, FullScreenBg } from "../theme"
+declare const Dialog: any
+// 历史记录页：展示最近生成列表，点击条目进入条码页查看
+export function HistoryPage({
+  history,
+  colorScheme,
+  settings,
+  favorites,
+  folders,
+  barcodeType,
+  buildItems,
+  onFavorite,
+  onCreateFolder,
+  onClose,
+  onClear,
+}: {
+  history: HistoryItem[]
+  colorScheme: "system" | "light" | "dark"
+  settings: StyleSettings
+  favorites: FavoriteItem[]
+  folders: string[]
+  barcodeType: BarcodeType
+  buildItems: (texts: string[], type: BarcodeType) => Promise<BarcodeItem[]>
+  onFavorite: (name: string, folder: string) => void
+  onCreateFolder: (parentFolder: string, name: string) => void
+  onClose: () => void
+  onClear: () => void
+}) {
+  const [selectedHistory, setSelectedHistory] = useState<{ item: HistoryItem; items: BarcodeItem[] } | null>(null)
+
+  // 点击历史条目：交给 NavigationStack 推入原生导航页。
+  async function selectHistory(item: HistoryItem) {
+    const validationError = validateTexts(item.texts, item.type)
+    if (validationError) {
+      await Dialog.alert({ message: validationError })
+      return
+    }
+    const barcodeItems = await buildItems(item.texts, item.type)
+    setSelectedHistory({ item, items: barcodeItems })
+  }
+
+  return (
+    <FullScreenBg cs={colorScheme}>
+    <ScrollView
+      {...schemeProps(colorScheme)} modifiers={modifiers()
+        .frame({ maxWidth: 'infinity', maxHeight: 'infinity' })
+        .toolbar({
+          topBarTrailing: <Button action={onClear} modifiers={modifiers().frame({ width: 40, height: 40, alignment: "center" }).padding(0).font(20).foregroundStyle(sub(colorScheme)).contentShape({ type: "rect", cornerRadius: 12 })}>
+            <Image systemName="trash" renderingMode="template" />
+          </Button>,
+        })
+        .navigationDestination({
+          isPresented: selectedHistory != null,
+          onChanged: (value: boolean) => {
+            if (!value) setSelectedHistory(null)
+          },
+          content: selectedHistory ? (
+            <PresentedBarcodes
+              items={selectedHistory.items}
+              settings={settings}
+              favorites={favorites}
+              folders={folders}
+              onFavorite={onFavorite}
+              onCreateFolder={onCreateFolder}
+              showCustomBack={false}
+              showFavoriteAction={false}
+              showShareAction={false}
+            />
+          ) : <Text />,
+        })}
+    >
+      <VStack alignment="center" spacing={12} padding={16}>
+        <Text
+          font={24}
+          fontWeight="bold"
+          modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'center' }).padding({ top: 4, bottom: 4 }).foregroundStyle(lab(colorScheme))}
+        >
+          历史纪录
+        </Text>
+        {history.length > 0 && (
+          <HStack
+            alignment="center"
+            modifiers={modifiers().frame({ maxWidth: 'infinity', alignment: 'trailing' }).padding({ top: 0, bottom: 2 })}
+          >
+            <Spacer />
+            <Button
+              action={onClear}
+              modifiers={modifiers().font(15).foregroundStyle("#3b82f6").contentShape({ type: "rect", cornerRadius: 8 })}
+            >
+              <HStack spacing={5}>
+                <Image systemName="trash" renderingMode="template" />
+                <Text font={15}>一键清空历史</Text>
+              </HStack>
+            </Button>
+          </HStack>
+        )}
+        {history.length === 0 ? (
+          <Text
+            font={16}
+            modifiers={modifiers()
+              .foregroundStyle(sub(colorScheme))
+              .padding({ top: 60 })}
+          >
+            暂无最近生成
+          </Text>
+        ) : (
+          history.map((item) => (
+            <Button
+              key={item.id}
+              action={() => selectHistory(item)}
+              modifiers={modifiers()
+                .frame({ maxWidth: 'infinity' })
+                .padding(10)
+                .background({
+                  style: cardB(colorScheme),
+                  shape: { type: "rect", cornerRadius: 15 },
+                })}
+            >
+              <HStack alignment="center" spacing={8}>
+                <Text
+                  font={15}
+                  modifiers={modifiers().lineLimit(1).foregroundStyle(lab(colorScheme))}
+                >
+                  {item.texts.length === 1
+                    ? item.texts[0]
+                    : `${item.texts.length} 条：${item.texts.join("、")}`}
+                </Text>
+                <Spacer />
+                <Text
+                  font={12}
+                  modifiers={modifiers().foregroundStyle(sub(colorScheme))}
+                >
+                  {formatHistoryTime(item.time)}
+                </Text>
+              </HStack>
+            </Button>
+          ))
+        )}
+      </VStack>
+    </ScrollView>
+    </FullScreenBg>
+  )
+}
